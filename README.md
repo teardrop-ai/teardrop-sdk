@@ -1,6 +1,6 @@
 # teardrop-sdk
 
-Python SDK for the [Teardrop](https://github.com/YOUR-ORG/teardrop) AI agent API.
+Python SDK for the [Teardrop](https://github.com/teardrop-ai/teardrop) AI agent API.
 
 ## Install
 

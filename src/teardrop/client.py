@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, AsyncIterator, Iterator
+from typing import Any, AsyncIterator
 
 import httpx
 
@@ -11,11 +11,13 @@ from teardrop.auth import TokenManager
 from teardrop.exceptions import (
     APIError,
     AuthenticationError,
+    ForbiddenError,
     PaymentRequiredError,
     RateLimitError,
 )
 from teardrop.models import (
     AgentCard,
+    AgentRunRequest,
     BillingBalance,
     CreditHistoryEntry,
     Invoice,
@@ -87,8 +89,13 @@ class AsyncTeardropClient:
             detail = body.get("error", "Payment required") if isinstance(body, dict) else str(body)
             reqs = body if isinstance(body, dict) else {}
             raise PaymentRequiredError(detail, requirements=reqs)
+        if resp.status_code == 403:
+            detail = body.get("detail", "Forbidden") if isinstance(body, dict) else str(body)
+            raise ForbiddenError(detail)
         if resp.status_code == 429:
-            detail = body.get("detail", "Rate limit exceeded") if isinstance(body, dict) else str(body)
+            detail = (
+                body.get("detail", "Rate limit exceeded") if isinstance(body, dict) else str(body)
+            )
             retry = int(resp.headers.get("Retry-After", "60"))
             raise RateLimitError(detail, retry_after=retry)
         raise APIError(resp.status_code, body)
@@ -113,12 +120,12 @@ class AsyncTeardropClient:
         headers = await self._headers()
         headers["Accept"] = "text/event-stream"
 
-        body = {
-            "message": message,
-            "thread_id": thread_id or str(uuid.uuid4()),
-        }
-        if context:
-            body["context"] = context
+        req = AgentRunRequest(
+            message=message,
+            thread_id=thread_id or str(uuid.uuid4()),
+            context=context or {},
+        )
+        body = req.model_dump()
 
         async with http.stream(
             "POST",
@@ -174,7 +181,9 @@ class AsyncTeardropClient:
             params=params,
         )
         self._raise_for_status(resp)
-        return resp.json()
+        data = resp.json()
+        data["items"] = [Invoice.model_validate(i) for i in data.get("items", [])]
+        return data
 
     async def get_credit_history(
         self, *, limit: int = 20, cursor: str | None = None
@@ -189,7 +198,9 @@ class AsyncTeardropClient:
             params=params,
         )
         self._raise_for_status(resp)
-        return resp.json()
+        data = resp.json()
+        data["items"] = [CreditHistoryEntry.model_validate(i) for i in data.get("items", [])]
+        return data
 
     async def topup_stripe(self, amount_cents: int, return_url: str) -> dict[str, Any]:
         http = await self._get_http()
@@ -248,21 +259,37 @@ class AsyncTeardropClient:
 class TeardropClient:
     """Synchronous wrapper around ``AsyncTeardropClient``.
 
-    Uses ``anyio.from_thread.run`` so it works inside existing event loops
-    (Jupyter, Django, etc.).
+    Maintains a persistent ``anyio`` blocking portal (background event-loop thread)
+    so the underlying ``httpx.AsyncClient`` is reused across calls.
+
+    Prefer using this as a context manager::
+
+        with TeardropClient("https://api.teardrop.dev", email="...", secret="...") as client:
+            events = client.run_sync("Hello")
+
+    Without a context manager the portal is started lazily; call ``close()``
+    explicitly to release the background thread.
     """
 
     def __init__(self, *args: Any, **kwargs: Any):
         self._async = AsyncTeardropClient(*args, **kwargs)
+        self._portal: Any | None = None
+        self._portal_exit: Any | None = None
+
+    def _ensure_portal(self) -> None:
+        if self._portal is None:
+            import anyio.from_thread
+
+            cm = anyio.from_thread.start_blocking_portal()
+            self._portal = cm.__enter__()
+            self._portal_exit = cm.__exit__
 
     def _run(self, coro: Any) -> Any:
-        import anyio.from_thread
-
-        return anyio.from_thread.run(coro)
+        self._ensure_portal()
+        return self._portal.call(lambda: coro)  # type: ignore[union-attr]
 
     def run_sync(self, message: str, **kwargs: Any) -> list[SSEEvent]:
         """Run agent and collect all events (blocking)."""
-        import anyio.from_thread
 
         async def _collect() -> list[SSEEvent]:
             events = []
@@ -270,13 +297,29 @@ class TeardropClient:
                 events.append(event)
             return events
 
-        return anyio.from_thread.run(_collect)
+        self._ensure_portal()
+        return self._portal.call(_collect)  # type: ignore[union-attr]
+
+    def authenticate_siwe(self, siwe_message: str, siwe_signature: str) -> str:
+        return self._run(self._async.authenticate_siwe(siwe_message, siwe_signature))
+
+    def get_me(self) -> dict[str, Any]:
+        return self._run(self._async.get_me())
 
     def get_balance(self) -> BillingBalance:
         return self._run(self._async.get_balance())
 
     def get_pricing(self) -> PricingInfo:
         return self._run(self._async.get_pricing())
+
+    def get_invoices(self, *, limit: int = 20, cursor: str | None = None) -> dict[str, Any]:
+        return self._run(self._async.get_invoices(limit=limit, cursor=cursor))
+
+    def get_credit_history(self, *, limit: int = 20, cursor: str | None = None) -> dict[str, Any]:
+        return self._run(self._async.get_credit_history(limit=limit, cursor=cursor))
+
+    def topup_stripe(self, amount_cents: int, return_url: str) -> dict[str, Any]:
+        return self._run(self._async.topup_stripe(amount_cents, return_url))
 
     def get_usage(self, **kwargs: Any) -> UsageSummary:
         return self._run(self._async.get_usage(**kwargs))
@@ -287,13 +330,15 @@ class TeardropClient:
     def get_agent_card(self) -> AgentCard:
         return self._run(self._async.get_agent_card())
 
-    def get_me(self) -> dict[str, Any]:
-        return self._run(self._async.get_me())
-
     def close(self) -> None:
-        self._run(self._async.close())
+        if self._portal is not None:
+            self._portal.call(lambda: self._async.close())  # type: ignore[union-attr]
+            self._portal_exit(None, None, None)  # type: ignore[misc]
+            self._portal = None
+            self._portal_exit = None
 
     def __enter__(self) -> TeardropClient:
+        self._ensure_portal()
         return self
 
     def __exit__(self, *exc: Any) -> None:

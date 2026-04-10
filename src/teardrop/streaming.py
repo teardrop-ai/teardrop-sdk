@@ -31,12 +31,16 @@ async def iter_sse_events(response: httpx.Response) -> AsyncIterator[SSEEvent]:
     Handles the standard SSE wire format::
 
         event: EVENT_TYPE\\n
+        id: <event-id>\\n
+        retry: <ms>\\n
         data: {"key": "value"}\\n
         \\n
 
     Yields one ``SSEEvent`` per complete event block.
     """
     event_type: str = ""
+    event_id: str = ""
+    retry_ms: int | None = None
     data_buf: list[str] = []
 
     async for raw_line in response.aiter_lines():
@@ -44,6 +48,14 @@ async def iter_sse_events(response: httpx.Response) -> AsyncIterator[SSEEvent]:
 
         if line.startswith("event:"):
             event_type = line[len("event:"):].strip()
+        elif line.startswith("id:"):
+            event_id = line[len("id:"):].strip()
+        elif line.startswith("retry:"):
+            raw_retry = line[len("retry:"):].strip()
+            try:
+                retry_ms = int(raw_retry)
+            except ValueError:
+                pass
         elif line.startswith("data:"):
             data_buf.append(line[len("data:"):].strip())
         elif line == "":
@@ -56,8 +68,15 @@ async def iter_sse_events(response: httpx.Response) -> AsyncIterator[SSEEvent]:
                         data = json.loads(data_str)
                     except json.JSONDecodeError:
                         data = {"raw": data_str}
-                yield SSEEvent(type=event_type or "message", data=data)
+                yield SSEEvent(
+                    type=event_type or "message",
+                    data=data,
+                    id=event_id,
+                    retry=retry_ms,
+                )
                 event_type = ""
+                event_id = ""
+                retry_ms = None
                 data_buf = []
 
     # Flush any trailing event without a final blank line.
@@ -69,7 +88,12 @@ async def iter_sse_events(response: httpx.Response) -> AsyncIterator[SSEEvent]:
                 data = json.loads(data_str)
             except json.JSONDecodeError:
                 data = {"raw": data_str}
-        yield SSEEvent(type=event_type or "message", data=data)
+        yield SSEEvent(
+            type=event_type or "message",
+            data=data,
+            id=event_id,
+            retry=retry_ms,
+        )
 
 
 def collect_text(events: list[SSEEvent]) -> str:
@@ -77,3 +101,15 @@ def collect_text(events: list[SSEEvent]) -> str:
     return "".join(
         e.data.get("delta", "") for e in events if e.type == EVENT_TEXT_MSG_CONTENT
     )
+
+
+async def async_collect_text(events: AsyncIterator[SSEEvent]) -> str:
+    """Async version of ``collect_text``: drain an async SSE event stream and
+    return the concatenated TEXT_MESSAGE_CONTENT deltas as a string.
+    """
+    parts: list[str] = []
+    async for event in events:
+        if event.type == EVENT_TEXT_MSG_CONTENT:
+            parts.append(event.data.get("delta", ""))
+    return "".join(parts)
+

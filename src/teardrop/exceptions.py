@@ -24,7 +24,9 @@ class PaymentRequiredError(TeardropError):
         requirements: The x402 payment requirements dict from the server.
     """
 
-    def __init__(self, detail: str = "Payment required", requirements: dict[str, Any] | None = None):
+    def __init__(
+        self, detail: str = "Payment required", requirements: dict[str, Any] | None = None
+    ):
         self.detail = detail
         self.requirements = requirements or {}
         super().__init__(detail)
@@ -40,6 +42,14 @@ class RateLimitError(TeardropError):
     def __init__(self, detail: str = "Rate limit exceeded", retry_after: int = 60):
         self.detail = detail
         self.retry_after = retry_after
+        super().__init__(detail)
+
+
+class ForbiddenError(TeardropError):
+    """Raised on 403 Forbidden responses (authenticated but not authorized)."""
+
+    def __init__(self, detail: str = "Forbidden"):
+        self.detail = detail
         super().__init__(detail)
 
 

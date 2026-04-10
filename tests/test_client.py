@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -13,13 +12,24 @@ from teardrop.client import AsyncTeardropClient
 from teardrop.exceptions import (
     APIError,
     AuthenticationError,
+    ForbiddenError,
     PaymentRequiredError,
     RateLimitError,
 )
-from teardrop.models import BillingBalance, PricingInfo, UsageSummary
+from teardrop.models import (
+    AgentCard,
+    BillingBalance,
+    CreditHistoryEntry,
+    Invoice,
+    PricingInfo,
+    UsageSummary,
+    Wallet,
+)
 
 
-def _json_response(body: dict | list, status: int = 200, headers: dict | None = None) -> httpx.Response:
+def _json_response(
+    body: dict | list, status: int = 200, headers: dict | None = None
+) -> httpx.Response:
     """Build a fake httpx.Response with JSON body."""
     resp = httpx.Response(
         status_code=status,
@@ -48,6 +58,18 @@ class TestRaiseForStatus:
         with pytest.raises(PaymentRequiredError, match="Insufficient credits"):
             client._raise_for_status(resp)
 
+    def test_403_raises_forbidden_error(self):
+        client = AsyncTeardropClient("http://test", token="tok.en.sig")
+        resp = _json_response({"detail": "You do not have permission"}, status=403)
+        with pytest.raises(ForbiddenError, match="You do not have permission"):
+            client._raise_for_status(resp)
+
+    def test_403_default_detail(self):
+        client = AsyncTeardropClient("http://test", token="tok.en.sig")
+        resp = _json_response({"error": "other"}, status=403)
+        with pytest.raises(ForbiddenError, match="Forbidden"):
+            client._raise_for_status(resp)
+
     def test_429_raises_rate_limit_error(self):
         client = AsyncTeardropClient("http://test", token="tok.en.sig")
         resp = _json_response(
@@ -65,6 +87,52 @@ class TestRaiseForStatus:
         with pytest.raises(APIError) as exc_info:
             client._raise_for_status(resp)
         assert exc_info.value.status_code == 500
+
+
+class TestRun:
+    @pytest.mark.asyncio
+    async def test_run_message_too_long_raises(self):
+        """AgentRunRequest enforces max_length=4096 before any HTTP call."""
+        from pydantic import ValidationError
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            with pytest.raises(ValidationError):
+                async for _ in client.run("x" * 4097):
+                    pass
+
+    @pytest.mark.asyncio
+    async def test_run_yields_sse_events(self):
+        sse_bytes = (
+            b"event: RUN_STARTED\ndata: {}\n\n"
+            b"event: TEXT_MESSAGE_CONTENT\ndata: {\"delta\": \"hi\"}\n\n"
+            b"event: DONE\ndata: {}\n\n"
+        )
+
+        async def _aiter_lines():
+            for line in sse_bytes.decode().splitlines():
+                yield line
+            yield ""  # final blank
+
+        mock_resp = MagicMock()
+        mock_resp.is_success = True
+        mock_resp.aiter_lines = _aiter_lines
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.stream = MagicMock(return_value=mock_resp)
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+                events = [e async for e in client.run("hello")]
+
+        assert len(events) == 3
+        assert events[0].type == "RUN_STARTED"
+        assert events[1].type == "TEXT_MESSAGE_CONTENT"
+        assert events[1].data["delta"] == "hi"
+        assert events[2].type == "DONE"
 
 
 class TestGetBalance:
@@ -86,7 +154,7 @@ class TestGetBalance:
 class TestGetPricing:
     @pytest.mark.asyncio
     async def test_returns_pricing_info(self):
-        pricing_data = {"rules": [], "model": "claude-sonnet-4-20250514"}
+        pricing_data = {"billing_enabled": True}
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(pricing_data))
@@ -96,6 +164,137 @@ class TestGetPricing:
             result = await client.get_pricing()
 
         assert isinstance(result, PricingInfo)
+
+
+class TestGetUsage:
+    @pytest.mark.asyncio
+    async def test_returns_usage_summary(self):
+        usage_data = {"total_runs": 5, "total_tokens_in": 100, "total_tokens_out": 200,
+                      "total_tool_calls": 3, "total_duration_ms": 5000}
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(return_value=_json_response(usage_data))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+                result = await client.get_usage()
+
+        assert isinstance(result, UsageSummary)
+        assert result.total_runs == 5
+
+
+class TestGetWallets:
+    @pytest.mark.asyncio
+    async def test_returns_wallet_list(self):
+        wallets_data = [
+            {"id": "w-1", "address": "0xABC", "chain_id": 8453,
+             "user_id": "u-1", "org_id": "o-1"}
+        ]
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(return_value=_json_response(wallets_data))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+                result = await client.get_wallets()
+
+        assert len(result) == 1
+        assert isinstance(result[0], Wallet)
+        assert result[0].address == "0xABC"
+
+
+class TestGetAgentCard:
+    @pytest.mark.asyncio
+    async def test_returns_agent_card(self):
+        card_data = {"name": "Teardrop Agent", "description": "AI agent", "url": "http://x",
+                     "skills": [], "unknown_field": "preserved"}
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(return_value=_json_response(card_data))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            result = await client.get_agent_card()
+
+        assert isinstance(result, AgentCard)
+        assert result.name == "Teardrop Agent"
+
+
+class TestGetMe:
+    @pytest.mark.asyncio
+    async def test_returns_dict(self):
+        me_data = {"sub": "user-1", "email": "a@b.com"}
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(return_value=_json_response(me_data))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+                result = await client.get_me()
+
+        assert result["sub"] == "user-1"
+
+
+class TestGetInvoices:
+    @pytest.mark.asyncio
+    async def test_validates_items(self):
+        invoice_item = {
+            "id": "inv-1", "run_id": "run-1", "user_id": "u-1", "org_id": "o-1",
+            "tokens_in": 10, "tokens_out": 20, "tool_calls": 1, "cost_usdc": 500,
+        }
+        response_data = {"items": [invoice_item], "next_cursor": None}
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(return_value=_json_response(response_data))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+                result = await client.get_invoices()
+
+        assert len(result["items"]) == 1
+        assert isinstance(result["items"][0], Invoice)
+        assert result["items"][0].id == "inv-1"
+
+
+class TestGetCreditHistory:
+    @pytest.mark.asyncio
+    async def test_validates_items(self):
+        entry = {
+            "id": "ch-1", "org_id": "o-1", "operation": "topup",
+            "amount_usdc": 1000, "balance_usdc_after": 5000,
+        }
+        response_data = {"items": [entry], "next_cursor": None}
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(return_value=_json_response(response_data))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+                result = await client.get_credit_history()
+
+        assert isinstance(result["items"][0], CreditHistoryEntry)
+        assert result["items"][0].operation == "topup"
+
+
+class TestTopupStripe:
+    @pytest.mark.asyncio
+    async def test_returns_dict(self):
+        topup_data = {"checkout_url": "https://stripe.com/pay/xyz"}
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.post = AsyncMock(return_value=_json_response(topup_data))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+                result = await client.topup_stripe(1000, "https://app.example.com/return")
+
+        assert "checkout_url" in result
 
 
 class TestContextManager:

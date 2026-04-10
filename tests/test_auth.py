@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from teardrop.auth import TokenManager, _REFRESH_BUFFER
+from teardrop.auth import TokenManager
 from teardrop.exceptions import AuthenticationError
 
 
@@ -100,7 +100,9 @@ class TestGetToken:
         tm = TokenManager("http://x", email="e", secret="s", token=old_token)
 
         client = _FakeClient(
-            _FakeHTTPResponse(200, {"access_token": new_token, "token_type": "bearer", "expires_in": 3600})
+            _FakeHTTPResponse(
+                200, {"access_token": new_token, "token_type": "bearer", "expires_in": 3600}
+            )
         )
         result = await tm.get_token(client)
         assert result == new_token
@@ -134,7 +136,9 @@ class TestAuthenticateSIWE:
     async def test_success(self):
         token = _make_jwt(exp=time.time() + 3600)
         client = _FakeClient(
-            _FakeHTTPResponse(200, {"access_token": token, "token_type": "bearer", "expires_in": 3600})
+            _FakeHTTPResponse(
+                200, {"access_token": token, "token_type": "bearer", "expires_in": 3600}
+            )
         )
         tm = TokenManager("http://x")
         result = await tm.authenticate_siwe(client, "siwe-msg", "0xSIG")

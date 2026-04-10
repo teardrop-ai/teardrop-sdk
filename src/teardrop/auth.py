@@ -68,21 +68,29 @@ class TokenManager:
 
         self._token = await self._fetch_token(client)
         self._expires_at = self._read_exp(self._token)
+        logger.debug("Token refreshed, expires_at=%.0f", self._expires_at)
         return self._token
 
     async def _fetch_token(self, client: httpx.AsyncClient) -> str:
         """POST /token to obtain a fresh JWT."""
         body: dict[str, Any] = {}
         if self._email and self._secret:
+            grant = "email"
             body = {"email": self._email, "secret": self._secret}
         elif self._client_id and self._client_secret:
+            grant = "client_credentials"
             body = {"client_id": self._client_id, "client_secret": self._client_secret}
+        else:
+            grant = "unknown"
 
+        logger.debug("Requesting token via %s", grant)
         resp = await client.post(f"{self._base_url}/token", json=body)
         if resp.status_code != 200:
+            logger.warning("Token request failed: %s", resp.status_code)
             raise AuthenticationError(f"Token request failed: {resp.status_code} {resp.text}")
 
         data = TokenResponse.model_validate(resp.json())
+        logger.debug("Token acquired, expires_in=%s", data.expires_in)
         return data.access_token
 
     async def authenticate_siwe(
@@ -100,6 +108,7 @@ class TokenManager:
         data = TokenResponse.model_validate(resp.json())
         self._token = data.access_token
         self._expires_at = self._read_exp(self._token)
+        logger.debug("SIWE authentication successful, expires_at=%.0f", self._expires_at)
         return self._token
 
     @staticmethod
@@ -120,4 +129,5 @@ class TokenManager:
             payload = json.loads(base64.urlsafe_b64decode(payload_b64))
             return float(payload.get("exp", 0))
         except Exception:
+            logger.warning("Failed to parse JWT exp claim; token lifetime unknown")
             return 0.0

@@ -6,9 +6,10 @@ import pytest
 
 from teardrop.models import SSEEvent
 from teardrop.streaming import (
-    EVENT_TEXT_MSG_CONTENT,
     EVENT_DONE,
     EVENT_RUN_STARTED,
+    EVENT_TEXT_MSG_CONTENT,
+    async_collect_text,
     collect_text,
     iter_sse_events,
 )
@@ -102,6 +103,58 @@ class TestIterSseEvents:
         assert len(events) == 1
         assert events[0].data == {"key": "value"}
 
+    @pytest.mark.asyncio
+    async def test_id_field_parsed(self):
+        lines = [
+            "event: TEXT_MESSAGE_CONTENT",
+            "id: evt-42",
+            'data: {"delta": "hi"}',
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert len(events) == 1
+        assert events[0].id == "evt-42"
+
+    @pytest.mark.asyncio
+    async def test_retry_field_parsed(self):
+        lines = [
+            "event: RUN_STARTED",
+            "retry: 3000",
+            "data: {}",
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert len(events) == 1
+        assert events[0].retry == 3000
+
+    @pytest.mark.asyncio
+    async def test_retry_invalid_value_ignored(self):
+        lines = [
+            "event: RUN_STARTED",
+            "retry: not-a-number",
+            "data: {}",
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert len(events) == 1
+        assert events[0].retry is None
+
+    @pytest.mark.asyncio
+    async def test_id_resets_between_events(self):
+        """id: field should reset between event blocks."""
+        lines = [
+            "event: RUN_STARTED",
+            "id: evt-1",
+            "data: {}",
+            "",
+            "event: DONE",
+            "data: {}",
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert events[0].id == "evt-1"
+        assert events[1].id == ""
+
 
 class TestCollectText:
     def test_concatenates_deltas(self):
@@ -122,3 +175,34 @@ class TestCollectText:
             SSEEvent(type=EVENT_DONE, data={}),
         ]
         assert collect_text(events) == "hi"
+
+
+class TestAsyncCollectText:
+    @pytest.mark.asyncio
+    async def test_concatenates_deltas(self):
+        async def _source():
+            yield SSEEvent(type=EVENT_RUN_STARTED, data={})
+            yield SSEEvent(type=EVENT_TEXT_MSG_CONTENT, data={"delta": "Hello"})
+            yield SSEEvent(type=EVENT_TEXT_MSG_CONTENT, data={"delta": " world"})
+            yield SSEEvent(type=EVENT_DONE, data={})
+
+        result = await async_collect_text(_source())
+        assert result == "Hello world"
+
+    @pytest.mark.asyncio
+    async def test_empty_stream(self):
+        async def _source():
+            return
+            yield  # make it an async generator
+
+        result = await async_collect_text(_source())
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_ignores_non_content_events(self):
+        async def _source():
+            yield SSEEvent(type=EVENT_RUN_STARTED, data={})
+            yield SSEEvent(type=EVENT_TEXT_MSG_CONTENT, data={"delta": "hi"})
+
+        result = await async_collect_text(_source())
+        assert result == "hi"

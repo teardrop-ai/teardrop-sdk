@@ -7,7 +7,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 
 
@@ -31,6 +30,8 @@ class SSEEvent(BaseModel):
 
     type: str = Field(..., description="Event type, e.g. TEXT_MESSAGE_CONTENT")
     data: dict[str, Any] = Field(default_factory=dict)
+    id: str = Field(default="", description="SSE event ID (for stream resumption)")
+    retry: int | None = Field(default=None, description="SSE retry interval in ms")
 
 
 # ─── Billing ──────────────────────────────────────────────────────────────────
@@ -97,12 +98,14 @@ class Wallet(BaseModel):
 
 
 class AgentCard(BaseModel):
-    """Minimal representation of the A2A agent card."""
+    """Minimal representation of the A2A agent card.
+
+    Unknown fields from the API are preserved via ``model_extra``.
+    """
 
     name: str = ""
     description: str = ""
     url: str = ""
     skills: list[dict[str, Any]] = Field(default_factory=list)
-    extra: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"extra": "allow"}
