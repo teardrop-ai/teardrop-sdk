@@ -25,6 +25,38 @@ EVENT_ERROR = "ERROR"
 EVENT_DONE = "DONE"
 
 
+def _build_event(
+    event_type: str,
+    event_id: str,
+    retry_ms: int | None,
+    data_buf: list[str],
+) -> SSEEvent:
+    """Construct an SSEEvent from a completed SSE block.
+
+    Uses ``model_construct`` to bypass Pydantic field validation — safe because
+    all values originate from the SDK's own parser, not user input.
+
+    A JSON pre-check (first character in ``{`` / ``[``) avoids the exception
+    path for non-JSON data strings without changing observable behaviour.
+    """
+    data: dict[str, Any] = {}
+    if data_buf:
+        data_str = "\n".join(data_buf)
+        if data_str and data_str[0] in ("{", "["):
+            try:
+                data = json.loads(data_str)
+            except json.JSONDecodeError:
+                data = {"raw": data_str}
+        elif data_str:
+            data = {"raw": data_str}
+    return SSEEvent.model_construct(
+        type=event_type or "message",
+        data=data,
+        id=event_id,
+        retry=retry_ms,
+    )
+
+
 async def iter_sse_events(response: httpx.Response) -> AsyncIterator[SSEEvent]:
     """Parse an SSE byte stream into typed ``SSEEvent`` objects.
 
@@ -44,36 +76,25 @@ async def iter_sse_events(response: httpx.Response) -> AsyncIterator[SSEEvent]:
     data_buf: list[str] = []
 
     async for raw_line in response.aiter_lines():
-        line = raw_line.rstrip("\n").rstrip("\r")
+        # Single-pass strip handles both \r\n and bare \n / \r line endings.
+        line = raw_line.rstrip("\r\n")
 
         if line.startswith("event:"):
-            event_type = line[len("event:"):].strip()
+            event_type = line[6:].lstrip(" ")
         elif line.startswith("id:"):
-            event_id = line[len("id:"):].strip()
+            event_id = line[3:].lstrip(" ")
         elif line.startswith("retry:"):
-            raw_retry = line[len("retry:"):].strip()
+            raw_retry = line[6:].lstrip(" ")
             try:
                 retry_ms = int(raw_retry)
             except ValueError:
                 pass
         elif line.startswith("data:"):
-            data_buf.append(line[len("data:"):].strip())
+            data_buf.append(line[5:].lstrip(" "))
         elif line == "":
             # Empty line = end of event block.
             if event_type or data_buf:
-                data_str = "\n".join(data_buf)
-                data: dict[str, Any] = {}
-                if data_str:
-                    try:
-                        data = json.loads(data_str)
-                    except json.JSONDecodeError:
-                        data = {"raw": data_str}
-                yield SSEEvent(
-                    type=event_type or "message",
-                    data=data,
-                    id=event_id,
-                    retry=retry_ms,
-                )
+                yield _build_event(event_type, event_id, retry_ms, data_buf)
                 event_type = ""
                 event_id = ""
                 retry_ms = None
@@ -81,19 +102,7 @@ async def iter_sse_events(response: httpx.Response) -> AsyncIterator[SSEEvent]:
 
     # Flush any trailing event without a final blank line.
     if event_type or data_buf:
-        data_str = "\n".join(data_buf)
-        data = {}
-        if data_str:
-            try:
-                data = json.loads(data_str)
-            except json.JSONDecodeError:
-                data = {"raw": data_str}
-        yield SSEEvent(
-            type=event_type or "message",
-            data=data,
-            id=event_id,
-            retry=retry_ms,
-        )
+        yield _build_event(event_type, event_id, retry_ms, data_buf)
 
 
 def collect_text(events: list[SSEEvent]) -> str:
