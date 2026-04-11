@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, patch
+
+import httpx
 
 from teardrop.client import TeardropClient
 from teardrop.models import BillingBalance, SSEEvent
@@ -110,3 +113,31 @@ class TestSyncDelegation:
                 result = client.topup_stripe(500, "https://app.example.com")
 
         assert "checkout_url" in result
+
+
+class TestSyncFromAgentCard:
+    def test_factory_pre_warms_cache(self):
+        """TeardropClient.from_agent_card() returns a client with _agent_card pre-populated."""
+        card_data = {"name": "Sync Agent", "url": "http://x", "description": "", "skills": []}
+        card_resp = httpx.Response(
+            status_code=200,
+            content=json.dumps(card_data).encode(),
+            headers={"content-type": "application/json"},
+            request=httpx.Request("GET", "http://test"),
+        )
+
+        with patch("teardrop.client.httpx.AsyncClient") as MockAsyncClient:
+            mock_http = AsyncMock()
+            mock_http.is_closed = False
+            mock_http.get = AsyncMock(return_value=card_resp)
+            MockAsyncClient.return_value = mock_http
+
+            client = TeardropClient.from_agent_card("http://test", token="tok.en.sig")
+            try:
+                assert client._async._agent_card is not None
+                assert client._async._agent_card.name == "Sync Agent"
+                # Cache is warm — second call must not trigger another HTTP request.
+                client.get_agent_card()
+                mock_http.get.assert_called_once()
+            finally:
+                client.close()

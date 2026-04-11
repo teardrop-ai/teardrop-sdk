@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from typing import Any, AsyncIterator
 
+import anyio
 import httpx
 
 from teardrop.auth import TokenManager
@@ -28,6 +30,13 @@ from teardrop.models import (
 )
 from teardrop.streaming import iter_sse_events
 
+# ─── Module constants ─────────────────────────────────────────────────────────
+
+# Seconds before a cached agent card is considered stale and must be re-fetched.
+_AGENT_CARD_TTL: int = 300
+# Upper bound on the agent-card response body (64 KB).  Blocks memory-bomb payloads.
+_AGENT_CARD_MAX_BYTES: int = 65_536
+
 
 class AsyncTeardropClient:
     """Async client for the Teardrop API.
@@ -49,9 +58,11 @@ class AsyncTeardropClient:
         client_secret: str | None = None,
         token: str | None = None,
         timeout: float = 120.0,
+        discovery_timeout: float = 10.0,
     ):
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._discovery_timeout = discovery_timeout
         self._token_manager = TokenManager(
             base_url,
             email=email,
@@ -61,6 +72,10 @@ class AsyncTeardropClient:
             token=token,
         )
         self._http: httpx.AsyncClient | None = None
+        # Agent-card cache
+        self._agent_card: AgentCard | None = None
+        self._agent_card_fetched_at: float = 0.0
+        self._agent_card_lock: anyio.Lock = anyio.Lock()
 
     async def _get_http(self) -> httpx.AsyncClient:
         if self._http is None or self._http.is_closed:
@@ -234,11 +249,82 @@ class AsyncTeardropClient:
 
     # ─── Agent card ───────────────────────────────────────────────────────
 
-    async def get_agent_card(self) -> AgentCard:
-        http = await self._get_http()
-        resp = await http.get(f"{self._base_url}/.well-known/agent-card.json")
-        self._raise_for_status(resp)
-        return AgentCard.model_validate(resp.json())
+    async def get_agent_card(self, *, force_refresh: bool = False) -> AgentCard:
+        """Fetch and cache the agent card from ``/.well-known/agent-card.json``.
+
+        The result is cached for ``_AGENT_CARD_TTL`` seconds (default 5 min).
+        Pass ``force_refresh=True`` to bypass the cache unconditionally.
+
+        Security hardening on every live fetch:
+
+        - Response body is capped at 64 KB to block memory-bomb payloads.
+        - ``Content-Type`` must contain ``application/json``.
+        - Uses ``discovery_timeout`` (default 10 s), isolated from the 120 s
+          API timeout, so a slow metadata endpoint cannot stall real requests.
+        """
+        # Fast path: cache is warm.
+        if (
+            not force_refresh
+            and self._agent_card is not None
+            and time.time() < self._agent_card_fetched_at + _AGENT_CARD_TTL
+        ):
+            return self._agent_card
+
+        async with self._agent_card_lock:
+            # Double-checked locking: re-validate inside the lock so concurrent
+            # coroutines that both missed the fast path only issue one HTTP request.
+            if (
+                not force_refresh
+                and self._agent_card is not None
+                and time.time() < self._agent_card_fetched_at + _AGENT_CARD_TTL
+            ):
+                return self._agent_card
+
+            http = await self._get_http()
+            resp = await http.get(
+                f"{self._base_url}/.well-known/agent-card.json",
+                timeout=httpx.Timeout(self._discovery_timeout),
+            )
+            self._raise_for_status(resp)
+
+            if len(resp.content) > _AGENT_CARD_MAX_BYTES:
+                raise APIError(
+                    resp.status_code,
+                    f"Agent card response too large "
+                    f"({len(resp.content)} bytes; limit {_AGENT_CARD_MAX_BYTES})",
+                )
+
+            ct = resp.headers.get("content-type", "")
+            if "application/json" not in ct:
+                raise APIError(
+                    resp.status_code,
+                    f"Unexpected Content-Type for agent card: {ct!r}",
+                )
+
+            self._agent_card = AgentCard.model_validate(resp.json())
+            self._agent_card_fetched_at = time.time()
+            return self._agent_card
+
+    # ─── Factory ──────────────────────────────────────────────────────────
+
+    @classmethod
+    async def from_agent_card(cls, base_url: str, **kwargs: Any) -> AsyncTeardropClient:
+        """Create a client and eagerly fetch the agent card for zero-config setup.
+
+        The agent card is discovered and cached before any user code runs, so
+        subsequent calls to ``get_agent_card()`` are free.  Misconfiguration
+        (bad URL, unreachable host) surfaces at construction time rather than
+        silently on the first run call.
+
+        Usage::
+
+            client = await AsyncTeardropClient.from_agent_card(
+                "https://api.teardrop.dev", email="...", secret="..."
+            )
+        """
+        client = cls(base_url, **kwargs)
+        await client.get_agent_card()
+        return client
 
     # ─── Lifecycle ────────────────────────────────────────────────────────
 
@@ -336,6 +422,16 @@ class TeardropClient:
             self._portal_exit(None, None, None)  # type: ignore[misc]
             self._portal = None
             self._portal_exit = None
+
+    @classmethod
+    def from_agent_card(cls, base_url: str, **kwargs: Any) -> TeardropClient:
+        """Create a sync client and eagerly fetch the agent card for zero-config setup.
+
+        Mirrors ``AsyncTeardropClient.from_agent_card`` for the synchronous API.
+        """
+        client = cls(base_url, **kwargs)
+        client.get_agent_card()
+        return client
 
     def __enter__(self) -> TeardropClient:
         self._ensure_portal()

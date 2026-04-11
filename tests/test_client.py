@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -309,3 +310,116 @@ class TestContextManager:
             pass  # __aexit__ should call close()
 
         mock_http.aclose.assert_awaited_once()
+
+
+class TestGetAgentCardCached:
+    """Tests for TTL caching, security hardening, and force_refresh on get_agent_card()."""
+
+    @pytest.mark.asyncio
+    async def test_cache_hit_no_extra_http_call(self):
+        """Second call returns cached result without a second HTTP request."""
+        card_data = {"name": "Teardrop Agent", "url": "http://x", "skills": []}
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(return_value=_json_response(card_data))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            first = await client.get_agent_card()
+            second = await client.get_agent_card()
+
+        assert first is second
+        mock_http.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_ttl_expiry_refetches(self):
+        """After TTL expires the next call issues a fresh HTTP request."""
+        card_data = {"name": "Teardrop Agent", "url": "http://x"}
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(return_value=_json_response(card_data))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            await client.get_agent_card()
+            # Push the fetch timestamp past the TTL window.
+            client._agent_card_fetched_at = time.time() - 400
+            await client.get_agent_card()
+
+        assert mock_http.get.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_force_refresh_bypasses_warm_cache(self):
+        """force_refresh=True fetches unconditionally even when cache is valid."""
+        card_data = {"name": "Teardrop Agent", "url": "http://x"}
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(return_value=_json_response(card_data))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            await client.get_agent_card()
+            await client.get_agent_card(force_refresh=True)
+
+        assert mock_http.get.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_size_cap_raises_api_error(self):
+        """Responses larger than 64 KB raise APIError."""
+        oversized_resp = httpx.Response(
+            status_code=200,
+            content=b"x" * 65537,
+            headers={"content-type": "application/json"},
+            request=httpx.Request("GET", "http://test"),
+        )
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(return_value=oversized_resp)
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with pytest.raises(APIError):
+                await client.get_agent_card()
+
+    @pytest.mark.asyncio
+    async def test_wrong_content_type_raises_api_error(self):
+        """A non-JSON Content-Type raises APIError."""
+        html_resp = httpx.Response(
+            status_code=200,
+            content=b"<html>Not JSON</html>",
+            headers={"content-type": "text/html; charset=utf-8"},
+            request=httpx.Request("GET", "http://test"),
+        )
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(return_value=html_resp)
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with pytest.raises(APIError):
+                await client.get_agent_card()
+
+
+class TestFromAgentCard:
+    @pytest.mark.asyncio
+    async def test_factory_pre_warms_cache(self):
+        """from_agent_card() returns a client with _agent_card already populated."""
+        card_data = {"name": "Teardrop Agent", "url": "http://x", "skills": []}
+
+        with patch("teardrop.client.httpx.AsyncClient") as MockAsyncClient:
+            mock_http = AsyncMock()
+            mock_http.is_closed = False
+            mock_http.get = AsyncMock(return_value=_json_response(card_data))
+            MockAsyncClient.return_value = mock_http
+
+            client = await AsyncTeardropClient.from_agent_card(
+                "http://test", token="tok.en.sig"
+            )
+            try:
+                assert client._agent_card is not None
+                assert client._agent_card.name == "Teardrop Agent"
+                # Second access must be served from cache — no extra HTTP call.
+                await client.get_agent_card()
+                mock_http.get.assert_called_once()
+            finally:
+                await client.close()
