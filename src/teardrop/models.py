@@ -108,4 +108,33 @@ class AgentCard(BaseModel):
     url: str = ""
     skills: list[dict[str, Any]] = Field(default_factory=list)
 
+
+# ─── Custom Tools ─────────────────────────────────────────────────────────────
+
+
+class CreateCustomToolRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    description: str = Field(..., min_length=1, max_length=500)
+    input_schema: dict[str, Any] = Field(...)
+    webhook_url: str = Field(..., max_length=2048)
+    webhook_method: str = Field(default="POST")
+    auth_header_name: str | None = Field(default=None, max_length=64)
+    auth_header_value: str | None = Field(default=None, max_length=4096)
+    timeout_seconds: int = Field(default=10, ge=1, le=30)
+
+
+class CustomTool(BaseModel):
+    id: str
+    org_id: str
+    name: str
+    description: str
+    input_schema: dict[str, Any]
+    webhook_url: str
+    webhook_method: str
+    has_auth: bool
+    timeout_seconds: int
+    is_active: bool
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
     model_config = {"extra": "allow"}

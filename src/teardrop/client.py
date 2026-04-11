@@ -21,7 +21,9 @@ from teardrop.models import (
     AgentCard,
     AgentRunRequest,
     BillingBalance,
+    CreateCustomToolRequest,
     CreditHistoryEntry,
+    CustomTool,
     Invoice,
     PricingInfo,
     SSEEvent,
@@ -305,6 +307,61 @@ class AsyncTeardropClient:
             self._agent_card_fetched_at = time.time()
             return self._agent_card
 
+    # ─── Custom Tools ─────────────────────────────────────────────────────
+
+    async def create_tool(self, request: CreateCustomToolRequest) -> CustomTool:
+        """POST /tools — register a new webhook-backed custom tool for the org."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/tools",
+            json=request.model_dump(exclude_none=True),
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return CustomTool.model_validate(resp.json())
+
+    async def list_tools(self) -> list[CustomTool]:
+        """GET /tools — list all custom tools registered for the org."""
+        http = await self._get_http()
+        resp = await http.get(f"{self._base_url}/tools", headers=await self._headers())
+        self._raise_for_status(resp)
+        return [CustomTool.model_validate(t) for t in resp.json()]
+
+    async def get_tool(self, tool_id: str) -> CustomTool:
+        """GET /tools/{tool_id} — fetch a single custom tool by ID."""
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/tools/{tool_id}", headers=await self._headers()
+        )
+        self._raise_for_status(resp)
+        return CustomTool.model_validate(resp.json())
+
+    async def update_tool(self, tool_id: str, **fields: Any) -> CustomTool:
+        """PATCH /tools/{tool_id} — update one or more fields on a custom tool.
+
+        Pass only the fields you want to change, e.g.::
+
+            await client.update_tool("abc", is_active=False, timeout_seconds=15)
+
+        ``None`` values are passed through (to allow explicit null-outs).
+        """
+        http = await self._get_http()
+        resp = await http.patch(
+            f"{self._base_url}/tools/{tool_id}",
+            json=fields,
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return CustomTool.model_validate(resp.json())
+
+    async def delete_tool(self, tool_id: str) -> None:
+        """DELETE /tools/{tool_id} — permanently remove a custom tool (204 No Content)."""
+        http = await self._get_http()
+        resp = await http.delete(
+            f"{self._base_url}/tools/{tool_id}", headers=await self._headers()
+        )
+        self._raise_for_status(resp)
+
     # ─── Factory ──────────────────────────────────────────────────────────
 
     @classmethod
@@ -415,6 +472,21 @@ class TeardropClient:
 
     def get_agent_card(self) -> AgentCard:
         return self._run(self._async.get_agent_card())
+
+    def create_tool(self, request: CreateCustomToolRequest) -> CustomTool:
+        return self._run(self._async.create_tool(request))
+
+    def list_tools(self) -> list[CustomTool]:
+        return self._run(self._async.list_tools())
+
+    def get_tool(self, tool_id: str) -> CustomTool:
+        return self._run(self._async.get_tool(tool_id))
+
+    def update_tool(self, tool_id: str, **fields: Any) -> CustomTool:
+        return self._run(self._async.update_tool(tool_id, **fields))
+
+    def delete_tool(self, tool_id: str) -> None:
+        return self._run(self._async.delete_tool(tool_id))
 
     def close(self) -> None:
         if self._portal is not None:
