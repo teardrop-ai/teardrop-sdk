@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Literal, TypedDict
 
 import httpx
 
@@ -121,4 +121,51 @@ async def async_collect_text(events: AsyncIterator[SSEEvent]) -> str:
         if event.type == EVENT_TEXT_MSG_CONTENT:
             parts.append(event.data.get("delta", ""))
     return "".join(parts)
+
+
+# ─── MCP tool name utilities ──────────────────────────────────────────────────
+
+_MCP_SEPARATOR = "__"
+
+
+class _McpToolMatch(TypedDict):
+    is_mcp: Literal[True]
+    server: str
+    tool: str
+
+
+class _McpToolNoMatch(TypedDict):
+    is_mcp: Literal[False]
+
+
+def parse_mcp_tool_name(tool_name: str) -> _McpToolMatch | _McpToolNoMatch:
+    """Split an MCP-namespaced tool name into server and tool components.
+
+    MCP server tools use a double-underscore separator::
+
+        "{server_name}__{mcp_tool_name}"
+
+    A single underscore is NOT a separator — it may appear in both the server
+    name and the tool name.
+
+    Returns a dict with ``is_mcp=True, server=..., tool=...`` when the
+    separator is found at a non-zero position, or ``{"is_mcp": False}`` for
+    global / org webhook tools.
+
+    Examples::
+
+        parse_mcp_tool_name("my_server__web_search")
+        # → {"is_mcp": True, "server": "my_server", "tool": "web_search"}
+
+        parse_mcp_tool_name("web_search")
+        # → {"is_mcp": False}
+    """
+    idx = tool_name.find(_MCP_SEPARATOR)
+    if idx > 0:
+        return {
+            "is_mcp": True,
+            "server": tool_name[:idx],
+            "tool": tool_name[idx + len(_MCP_SEPARATOR) :],
+        }
+    return {"is_mcp": False}
 

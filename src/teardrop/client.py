@@ -13,20 +13,28 @@ from teardrop.auth import TokenManager
 from teardrop.exceptions import (
     APIError,
     AuthenticationError,
+    ConflictError,
     ForbiddenError,
+    GatewayError,
+    NotFoundError,
     PaymentRequiredError,
     RateLimitError,
+    ValidationError,
 )
 from teardrop.models import (
     AgentCard,
     AgentRunRequest,
     BillingBalance,
     CreateCustomToolRequest,
+    CreateMcpServerRequest,
     CreditHistoryEntry,
     CustomTool,
+    DiscoverMcpToolsResponse,
     Invoice,
+    OrgMcpServer,
     PricingInfo,
     SSEEvent,
+    UpdateMcpServerRequest,
     UsageSummary,
     Wallet,
 )
@@ -109,12 +117,24 @@ class AsyncTeardropClient:
         if resp.status_code == 403:
             detail = body.get("detail", "Forbidden") if isinstance(body, dict) else str(body)
             raise ForbiddenError(detail)
+        if resp.status_code == 404:
+            detail = body.get("detail", "Not found") if isinstance(body, dict) else str(body)
+            raise NotFoundError(detail)
+        if resp.status_code == 409:
+            detail = body.get("detail", "Conflict") if isinstance(body, dict) else str(body)
+            raise ConflictError(detail)
+        if resp.status_code == 422:
+            detail = body.get("detail", "Validation error") if isinstance(body, dict) else str(body)
+            raise ValidationError(detail)
         if resp.status_code == 429:
             detail = (
                 body.get("detail", "Rate limit exceeded") if isinstance(body, dict) else str(body)
             )
             retry = int(resp.headers.get("Retry-After", "60"))
             raise RateLimitError(detail, retry_after=retry)
+        if resp.status_code == 502:
+            detail = body.get("detail", "Bad gateway") if isinstance(body, dict) else str(body)
+            raise GatewayError(detail)
         raise APIError(resp.status_code, body)
 
     # ─── Core: Agent ──────────────────────────────────────────────────────
@@ -361,7 +381,93 @@ class AsyncTeardropClient:
             f"{self._base_url}/tools/{tool_id}", headers=await self._headers()
         )
         self._raise_for_status(resp)
+    # ─── MCP Servers ───────────────────────────────────────────────────────────
 
+    async def create_mcp_server(self, request: CreateMcpServerRequest) -> OrgMcpServer:
+        """POST /mcp/servers — register a new external MCP server for the org."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/mcp/servers",
+            json=request.model_dump(exclude_none=True),
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return OrgMcpServer.model_validate(resp.json())
+
+    async def list_mcp_servers(self) -> list[OrgMcpServer]:
+        """GET /mcp/servers — list active MCP servers for the org."""
+        http = await self._get_http()
+        resp = await http.get(f"{self._base_url}/mcp/servers", headers=await self._headers())
+        self._raise_for_status(resp)
+        return [OrgMcpServer.model_validate(s) for s in resp.json()]
+
+    async def get_mcp_server(self, server_id: str) -> OrgMcpServer:
+        """GET /mcp/servers/{server_id} — fetch a single MCP server by ID."""
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/mcp/servers/{server_id}", headers=await self._headers()
+        )
+        self._raise_for_status(resp)
+        return OrgMcpServer.model_validate(resp.json())
+
+    async def update_mcp_server(
+        self, server_id: str, request: UpdateMcpServerRequest
+    ) -> OrgMcpServer:
+        """PATCH /mcp/servers/{server_id} — partially update an MCP server.
+
+        Only fields explicitly set on *request* are sent to the API.
+        Pass ``auth_token=None`` to explicitly clear a stored token; omitting
+        ``auth_token`` entirely leaves the existing token unchanged.
+        """
+        http = await self._get_http()
+        resp = await http.patch(
+            f"{self._base_url}/mcp/servers/{server_id}",
+            json=request.model_dump(exclude_unset=True),
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return OrgMcpServer.model_validate(resp.json())
+
+    async def delete_mcp_server(self, server_id: str) -> dict[str, str]:
+        """DELETE /mcp/servers/{server_id} — soft-delete an MCP server.
+
+        Sets ``is_active=False``; the agent stops using the server's tools
+        immediately (cache invalidated). The record is preserved for audit.
+        Returns ``{"status": "deleted"}``.
+        """
+        http = await self._get_http()
+        resp = await http.delete(
+            f"{self._base_url}/mcp/servers/{server_id}", headers=await self._headers()
+        )
+        self._raise_for_status(resp)
+        return resp.json()
+
+    async def discover_mcp_server_tools(self, server_id: str) -> DiscoverMcpToolsResponse:
+        """POST /mcp/servers/{server_id}/discover — live-probe the MCP server.
+
+        Connects to the server right now and returns its available tool schemas.
+        Bypasses the agent's TTL cache. Does NOT mutate state.
+        """
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/mcp/servers/{server_id}/discover",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return DiscoverMcpToolsResponse.model_validate(resp.json())
+
+    async def admin_list_mcp_servers(self, org_id: str) -> list[OrgMcpServer]:
+        """GET /admin/mcp/servers/{org_id} — admin: list ALL servers for the org.
+
+        Includes inactive (soft-deleted) servers. Requires ``role=admin`` on
+        the authenticated token.
+        """
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/admin/mcp/servers/{org_id}", headers=await self._headers()
+        )
+        self._raise_for_status(resp)
+        return [OrgMcpServer.model_validate(s) for s in resp.json()]
     # ─── Factory ──────────────────────────────────────────────────────────
 
     @classmethod
@@ -487,6 +593,27 @@ class TeardropClient:
 
     def delete_tool(self, tool_id: str) -> None:
         return self._run(self._async.delete_tool(tool_id))
+
+    def create_mcp_server(self, request: CreateMcpServerRequest) -> OrgMcpServer:
+        return self._run(self._async.create_mcp_server(request))
+
+    def list_mcp_servers(self) -> list[OrgMcpServer]:
+        return self._run(self._async.list_mcp_servers())
+
+    def get_mcp_server(self, server_id: str) -> OrgMcpServer:
+        return self._run(self._async.get_mcp_server(server_id))
+
+    def update_mcp_server(self, server_id: str, request: UpdateMcpServerRequest) -> OrgMcpServer:
+        return self._run(self._async.update_mcp_server(server_id, request))
+
+    def delete_mcp_server(self, server_id: str) -> dict[str, str]:
+        return self._run(self._async.delete_mcp_server(server_id))
+
+    def discover_mcp_server_tools(self, server_id: str) -> DiscoverMcpToolsResponse:
+        return self._run(self._async.discover_mcp_server_tools(server_id))
+
+    def admin_list_mcp_servers(self, org_id: str) -> list[OrgMcpServer]:
+        return self._run(self._async.admin_list_mcp_servers(org_id))
 
     def close(self) -> None:
         if self._portal is not None:

@@ -66,3 +66,31 @@ class APIError(TeardropError):
         self.body = body
         self.detail = detail or f"API error {status_code}"
         super().__init__(self.detail)
+
+
+class NotFoundError(APIError):
+    """Raised on 404 Not Found responses."""
+
+    def __init__(self, detail: str = "Not found"):
+        super().__init__(404, detail=detail)
+
+
+class ConflictError(APIError):
+    """Raised on 409 Conflict responses (e.g. duplicate MCP server name)."""
+
+    def __init__(self, detail: str = "Conflict"):
+        super().__init__(409, detail=detail)
+
+
+class ValidationError(APIError):
+    """Raised on 422 Unprocessable Entity responses (server-side validation failure)."""
+
+    def __init__(self, detail: str = "Validation error"):
+        super().__init__(422, detail=detail)
+
+
+class GatewayError(APIError):
+    """Raised on 502 Bad Gateway responses (e.g. MCP server unreachable)."""
+
+    def __init__(self, detail: str = "Bad gateway"):
+        super().__init__(502, detail=detail)

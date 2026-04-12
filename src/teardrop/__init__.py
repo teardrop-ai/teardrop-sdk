@@ -4,22 +4,32 @@ from teardrop.client import AsyncTeardropClient, TeardropClient
 from teardrop.exceptions import (
     APIError,
     AuthenticationError,
+    ConflictError,
     ForbiddenError,
+    GatewayError,
+    NotFoundError,
     PaymentRequiredError,
     RateLimitError,
     TeardropError,
+    ValidationError,
 )
 from teardrop.models import (
     AgentCard,
     AgentRunRequest,
     BillingBalance,
     CreateCustomToolRequest,
+    CreateMcpServerRequest,
     CreditHistoryEntry,
     CustomTool,
+    DiscoverMcpToolsResponse,
     Invoice,
+    McpServerAuthType,
+    McpToolDefinition,
+    OrgMcpServer,
     PricingInfo,
     SSEEvent,
     TokenResponse,
+    UpdateMcpServerRequest,
     UsageSummary,
     Wallet,
 )
@@ -40,25 +50,35 @@ from teardrop.streaming import (
     async_collect_text,
     collect_text,
     iter_sse_events,
+    parse_mcp_tool_name,
 )
 
 __all__ = [
     # Clients
     "AsyncTeardropClient",
     "TeardropClient",
-    # Models
+    # Models - agent
     "AgentCard",
     "AgentRunRequest",
+    "SSEEvent",
+    # Models - billing
     "BillingBalance",
-    "CreateCustomToolRequest",
     "CreditHistoryEntry",
-    "CustomTool",
     "Invoice",
     "PricingInfo",
-    "SSEEvent",
     "TokenResponse",
     "UsageSummary",
     "Wallet",
+    # Models - org webhook tools
+    "CreateCustomToolRequest",
+    "CustomTool",
+    # Models - MCP servers
+    "McpServerAuthType",
+    "OrgMcpServer",
+    "CreateMcpServerRequest",
+    "UpdateMcpServerRequest",
+    "McpToolDefinition",
+    "DiscoverMcpToolsResponse",
     # Exceptions
     "TeardropError",
     "AuthenticationError",
@@ -66,10 +86,15 @@ __all__ = [
     "PaymentRequiredError",
     "RateLimitError",
     "APIError",
+    "NotFoundError",
+    "ConflictError",
+    "ValidationError",
+    "GatewayError",
     # Streaming
     "async_collect_text",
     "collect_text",
     "iter_sse_events",
+    "parse_mcp_tool_name",
     "EVENT_BILLING_SETTLEMENT",
     "EVENT_DONE",
     "EVENT_ERROR",
