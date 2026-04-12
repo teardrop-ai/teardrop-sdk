@@ -11,6 +11,7 @@ version = "0.1.0"
 description = "Python SDK for the Teardrop AI agent API"
 readme = "README.md"
 license = "MIT"
+keywords = ["x402", "web3", "ai-agent", "mcp", "a2a", "ag-ui", "fastapi", "langchain", "siwe", "usdc", "base"]
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.28.0",
