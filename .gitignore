@@ -40,4 +40,5 @@ htmlcov/
 
 # Project-specific
 .well-known/
+notes/
 *.log

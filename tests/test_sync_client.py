@@ -43,7 +43,7 @@ class TestRunSync:
             SSEEvent(type="DONE", data={}),
         ]
 
-        async def _fake_run(message, **kwargs):
+        async def _fake_run(prompt, **kwargs):
             for e in expected_events:
                 yield e
 
@@ -75,12 +75,12 @@ class TestSyncDelegation:
         assert result["sub"] == "user-1"
 
     def test_authenticate_siwe_delegates(self):
-        async def _fake_siwe(msg, sig):
+        async def _fake_siwe(msg, sig, nonce):
             return "jwt.token.here"
 
         with TeardropClient("http://test", token="tok.en.sig") as client:
             with patch.object(client._async, "authenticate_siwe", side_effect=_fake_siwe):
-                result = client.authenticate_siwe("msg", "0xSIG")
+                result = client.authenticate_siwe("msg", "0xSIG", "nonce-abc")
 
         assert result == "jwt.token.here"
 
@@ -105,12 +105,20 @@ class TestSyncDelegation:
         assert result == response
 
     def test_topup_stripe_delegates(self):
-        async def _fake(amount, url):
-            return {"checkout_url": "https://stripe.com/pay/x"}
+        from teardrop.models import StripeTopupRequest
+
+        async def _fake(request):
+            return {"session_id": "sess_x", "checkout_url": "https://stripe.com/pay/x"}
 
         with TeardropClient("http://test", token="tok.en.sig") as client:
             with patch.object(client._async, "topup_stripe", side_effect=_fake):
-                result = client.topup_stripe(500, "https://app.example.com")
+                result = client.topup_stripe(
+                    StripeTopupRequest(
+                        amount_usdc=1_000_000,
+                        success_url="https://app.example.com/success",
+                        cancel_url="https://app.example.com/cancel",
+                    )
+                )
 
         assert "checkout_url" in result
 

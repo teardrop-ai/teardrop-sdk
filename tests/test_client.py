@@ -20,9 +20,9 @@ from teardrop.exceptions import (
 from teardrop.models import (
     AgentCard,
     BillingBalance,
+    BillingPricingResponse,
     CreditHistoryEntry,
     Invoice,
-    PricingInfo,
     UsageSummary,
     Wallet,
 )
@@ -103,10 +103,14 @@ class TestRun:
 
     @pytest.mark.asyncio
     async def test_run_yields_sse_events(self):
+        import json
+        def _ev(event, data=None):
+            return json.dumps({"event": event, "data": data or {}}).encode()
+
         sse_bytes = (
-            b"event: RUN_STARTED\ndata: {}\n\n"
-            b"event: TEXT_MESSAGE_CONTENT\ndata: {\"delta\": \"hi\"}\n\n"
-            b"event: DONE\ndata: {}\n\n"
+            b"data: " + _ev("RUN_STARTED") + b"\n\n"
+            + b"data: " + _ev("TEXT_MESSAGE_CONTENT", {"delta": "hi"}) + b"\n\n"
+            + b"data: " + _ev("DONE") + b"\n\n"
         )
 
         async def _aiter_lines():
@@ -155,7 +159,7 @@ class TestGetBalance:
 class TestGetPricing:
     @pytest.mark.asyncio
     async def test_returns_pricing_info(self):
-        pricing_data = {"billing_enabled": True}
+        pricing_data = {"tools": [], "base_cost_usdc": 1000, "updated_at": "2026-01-01T00:00:00Z"}
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(pricing_data))
@@ -164,14 +168,23 @@ class TestGetPricing:
             client._http = mock_http
             result = await client.get_pricing()
 
-        assert isinstance(result, PricingInfo)
+        assert isinstance(result, BillingPricingResponse)
 
 
 class TestGetUsage:
     @pytest.mark.asyncio
     async def test_returns_usage_summary(self):
-        usage_data = {"total_runs": 5, "total_tokens_in": 100, "total_tokens_out": 200,
-                      "total_tool_calls": 3, "total_duration_ms": 5000}
+        usage_data = {
+            "user_id": "u-1",
+            "org_id": "o-1",
+            "period_from": "2026-01-01T00:00:00Z",
+            "period_to": "2026-01-31T23:59:59Z",
+            "total_runs": 5,
+            "total_tokens_in": 100,
+            "total_tokens_out": 200,
+            "total_tool_calls": 3,
+            "total_cost_usdc": 5000,
+        }
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(usage_data))
@@ -190,7 +203,7 @@ class TestGetWallets:
     async def test_returns_wallet_list(self):
         wallets_data = [
             {"id": "w-1", "address": "0xABC", "chain_id": 8453,
-             "user_id": "u-1", "org_id": "o-1"}
+             "user_id": "u-1", "is_primary": False, "linked_at": "2026-01-01T00:00:00Z"}
         ]
         mock_http = AsyncMock()
         mock_http.is_closed = False
@@ -225,8 +238,17 @@ class TestGetAgentCard:
 
 class TestGetMe:
     @pytest.mark.asyncio
-    async def test_returns_dict(self):
-        me_data = {"sub": "user-1", "email": "a@b.com"}
+    async def test_returns_jwt_payload(self):
+        from teardrop.models import JwtPayloadBase
+        me_data = {
+            "sub": "user-1",
+            "org_id": "org-1",
+            "role": "member",
+            "auth_method": "email",
+            "email": "a@b.com",
+            "exp": 9999999999,
+            "iat": 1000000000,
+        }
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(me_data))
@@ -236,15 +258,21 @@ class TestGetMe:
             with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
                 result = await client.get_me()
 
-        assert result["sub"] == "user-1"
+        assert isinstance(result, JwtPayloadBase)
+        assert result.sub == "user-1"
 
 
 class TestGetInvoices:
     @pytest.mark.asyncio
     async def test_validates_items(self):
         invoice_item = {
-            "id": "inv-1", "run_id": "run-1", "user_id": "u-1", "org_id": "o-1",
-            "tokens_in": 10, "tokens_out": 20, "tool_calls": 1, "cost_usdc": 500,
+            "run_id": "run-1",
+            "tokens_in": 10,
+            "tokens_out": 20,
+            "tool_calls": 1,
+            "total_usdc": 500,
+            "breakdown": [],
+            "settled_at": "2026-01-01T00:00:00Z",
         }
         response_data = {"items": [invoice_item], "next_cursor": None}
         mock_http = AsyncMock()
@@ -258,15 +286,18 @@ class TestGetInvoices:
 
         assert len(result["items"]) == 1
         assert isinstance(result["items"][0], Invoice)
-        assert result["items"][0].id == "inv-1"
+        assert result["items"][0].run_id == "run-1"
 
 
 class TestGetCreditHistory:
     @pytest.mark.asyncio
     async def test_validates_items(self):
         entry = {
-            "id": "ch-1", "org_id": "o-1", "operation": "topup",
-            "amount_usdc": 1000, "balance_usdc_after": 5000,
+            "id": "ch-1",
+            "amount_usdc": 1000,
+            "method": "stripe",
+            "reference": None,
+            "created_at": "2026-01-01T00:00:00Z",
         }
         response_data = {"items": [entry], "next_cursor": None}
         mock_http = AsyncMock()
@@ -279,13 +310,14 @@ class TestGetCreditHistory:
                 result = await client.get_credit_history()
 
         assert isinstance(result["items"][0], CreditHistoryEntry)
-        assert result["items"][0].operation == "topup"
+        assert result["items"][0].method == "stripe"
 
 
 class TestTopupStripe:
     @pytest.mark.asyncio
-    async def test_returns_dict(self):
-        topup_data = {"checkout_url": "https://stripe.com/pay/xyz"}
+    async def test_returns_stripe_response(self):
+        from teardrop.models import StripeTopupRequest, StripeTopupResponse
+        topup_data = {"session_id": "sess_abc", "checkout_url": "https://stripe.com/pay/xyz"}
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.post = AsyncMock(return_value=_json_response(topup_data))
@@ -293,9 +325,16 @@ class TestTopupStripe:
         async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
             client._http = mock_http
             with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
-                result = await client.topup_stripe(1000, "https://app.example.com/return")
+                result = await client.topup_stripe(
+                    StripeTopupRequest(
+                        amount_usdc=1_000_000,
+                        success_url="https://app.example.com/success",
+                        cancel_url="https://app.example.com/cancel",
+                    )
+                )
 
-        assert "checkout_url" in result
+        assert isinstance(result, StripeTopupResponse)
+        assert result.checkout_url == "https://stripe.com/pay/xyz"
 
 
 class TestContextManager:

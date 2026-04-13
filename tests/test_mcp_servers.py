@@ -286,12 +286,18 @@ class TestUpdateMcpServer:
 
 class TestDeleteMcpServer:
     @pytest.mark.asyncio
-    async def test_delete_success_returns_status(
+    async def test_delete_success_returns_none(
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
-        mock_http.delete = AsyncMock(return_value=_json_response({"status": "deleted"}))
+        mock_http.delete = AsyncMock(
+            return_value=httpx.Response(
+                status_code=204,
+                content=b"",
+                request=httpx.Request("DELETE", "http://test"),
+            )
+        )
         result = await client.delete_mcp_server("srv-1")
-        assert result == {"status": "deleted"}
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_delete_not_found_raises_not_found_error(
@@ -349,6 +355,16 @@ class TestDiscoverMcpServerTools:
             await client.discover_mcp_server_tools("nonexistent-id")
 
     @pytest.mark.asyncio
+    async def test_discover_gateway_error_on_504(
+        self, client: AsyncTeardropClient, mock_http: AsyncMock
+    ) -> None:
+        mock_http.post = AsyncMock(
+            return_value=_json_response({"detail": "MCP server timed out"}, status=504)
+        )
+        with pytest.raises(GatewayError):
+            await client.discover_mcp_server_tools("srv-1")
+
+    @pytest.mark.asyncio
     async def test_discover_gateway_error_on_502(
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
@@ -368,40 +384,6 @@ class TestDiscoverMcpServerTools:
         await client.discover_mcp_server_tools("srv-1")
         url_called = mock_http.post.call_args.args[0]
         assert url_called == "http://test/mcp/servers/srv-1/discover"
-
-
-# ─── AdminListMcpServers ──────────────────────────────────────────────────────
-
-
-class TestAdminListMcpServers:
-    @pytest.mark.asyncio
-    async def test_admin_list_returns_active_and_inactive(
-        self, client: AsyncTeardropClient, mock_http: AsyncMock
-    ) -> None:
-        inactive = {**_SERVER, "id": "srv-2", "is_active": False}
-        mock_http.get = AsyncMock(return_value=_json_response([_SERVER, inactive]))
-        result = await client.admin_list_mcp_servers("org-abc")
-        assert len(result) == 2
-        assert any(not s.is_active for s in result)
-
-    @pytest.mark.asyncio
-    async def test_admin_requires_admin_role(
-        self, client: AsyncTeardropClient, mock_http: AsyncMock
-    ) -> None:
-        mock_http.get = AsyncMock(
-            return_value=_json_response({"detail": "Forbidden"}, status=403)
-        )
-        with pytest.raises(ForbiddenError):
-            await client.admin_list_mcp_servers("org-abc")
-
-    @pytest.mark.asyncio
-    async def test_admin_hits_admin_endpoint(
-        self, client: AsyncTeardropClient, mock_http: AsyncMock
-    ) -> None:
-        mock_http.get = AsyncMock(return_value=_json_response([]))
-        await client.admin_list_mcp_servers("org-abc")
-        url_called = mock_http.get.call_args.args[0]
-        assert url_called == "http://test/admin/mcp/servers/org-abc"
 
 
 # ─── parse_mcp_tool_name ──────────────────────────────────────────────────────

@@ -12,12 +12,9 @@ from teardrop.models import SSEEvent
 # Event types emitted by the Teardrop server.
 EVENT_RUN_STARTED = "RUN_STARTED"
 EVENT_RUN_FINISHED = "RUN_FINISHED"
-EVENT_TEXT_MSG_START = "TEXT_MESSAGE_START"
 EVENT_TEXT_MSG_CONTENT = "TEXT_MESSAGE_CONTENT"
-EVENT_TEXT_MSG_END = "TEXT_MESSAGE_END"
 EVENT_TOOL_CALL_START = "TOOL_CALL_START"
 EVENT_TOOL_CALL_END = "TOOL_CALL_END"
-EVENT_STATE_SNAPSHOT = "STATE_SNAPSHOT"
 EVENT_SURFACE_UPDATE = "SURFACE_UPDATE"
 EVENT_USAGE_SUMMARY = "USAGE_SUMMARY"
 EVENT_BILLING_SETTLEMENT = "BILLING_SETTLEMENT"
@@ -26,25 +23,39 @@ EVENT_DONE = "DONE"
 
 
 def _build_event(
-    event_type: str,
+    sse_event_type: str,
     event_id: str,
     retry_ms: int | None,
     data_buf: list[str],
 ) -> SSEEvent:
     """Construct an SSEEvent from a completed SSE block.
 
+    The backend sends events in the format::
+
+        data: {"event": "<type>", "data": { ... }}\n\n
+
+    The ``event:`` SSE framing field is NOT used by the backend; the event
+    type is embedded inside the JSON payload.  The ``sse_event_type`` parameter
+    is kept as a fallback for streams that do use the SSE framing field.
+
     Uses ``model_construct`` to bypass Pydantic field validation — safe because
     all values originate from the SDK's own parser, not user input.
-
-    A JSON pre-check (first character in ``{`` / ``[``) avoids the exception
-    path for non-JSON data strings without changing observable behaviour.
     """
     data: dict[str, Any] = {}
+    event_type: str = sse_event_type
+
     if data_buf:
         data_str = "\n".join(data_buf)
         if data_str and data_str[0] in ("{", "["):
             try:
-                data = json.loads(data_str)
+                parsed = json.loads(data_str)
+                if isinstance(parsed, dict) and "event" in parsed:
+                    # Spec format: {"event": "TYPE", "data": {...}}
+                    event_type = parsed.get("event", sse_event_type)
+                    inner = parsed.get("data", {})
+                    data = inner if isinstance(inner, dict) else {"value": inner}
+                else:
+                    data = parsed if isinstance(parsed, dict) else {"value": parsed}
             except json.JSONDecodeError:
                 data = {"raw": data_str}
         elif data_str:
@@ -60,15 +71,18 @@ def _build_event(
 async def iter_sse_events(response: httpx.Response) -> AsyncIterator[SSEEvent]:
     """Parse an SSE byte stream into typed ``SSEEvent`` objects.
 
-    Handles the standard SSE wire format::
+    Handles both the spec-mandated format (event type embedded in JSON)::
 
-        event: EVENT_TYPE\\n
-        id: <event-id>\\n
-        retry: <ms>\\n
-        data: {"key": "value"}\\n
-        \\n
+        data: {"event": "TYPE", "data": {...}}\n\n
 
-    Yields one ``SSEEvent`` per complete event block.
+    and the standard SSE wire format (for compatibility)::
+
+        event: EVENT_TYPE\n
+        data: {"key": "value"}\n
+        \n
+
+    Yields one ``SSEEvent`` per complete event block.  Ignores ``:`` comment
+    lines (SSE heartbeats).
     """
     event_type: str = ""
     event_id: str = ""
@@ -79,7 +93,10 @@ async def iter_sse_events(response: httpx.Response) -> AsyncIterator[SSEEvent]:
         # Single-pass strip handles both \r\n and bare \n / \r line endings.
         line = raw_line.rstrip("\r\n")
 
-        if line.startswith("event:"):
+        if line.startswith(":"):
+            # SSE comment / heartbeat — ignore per spec.
+            continue
+        elif line.startswith("event:"):
             event_type = line[6:].lstrip(" ")
         elif line.startswith("id:"):
             event_id = line[3:].lstrip(" ")

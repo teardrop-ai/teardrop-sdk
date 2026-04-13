@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -16,13 +15,32 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
+class JwtPayloadBase(BaseModel):
+    """Decoded JWT payload returned by GET /auth/me."""
+
+    sub: str
+    org_id: str
+    role: Literal["admin", "member"]
+    auth_method: str
+    email: str | None = None
+    exp: int
+    iat: int
+    # SIWE-specific fields (present when auth_method == "siwe")
+    address: str | None = None
+    chain_id: int | None = None
+
+    model_config = {"extra": "allow"}
+
+
 # ─── Agent ────────────────────────────────────────────────────────────────────
 
 
 class AgentRunRequest(BaseModel):
-    message: str = Field(..., max_length=4096)
+    prompt: str = Field(..., max_length=4096)
     thread_id: str = ""
-    context: dict[str, Any] = Field(default_factory=dict)
+    model: str | None = None
+    x402_payment_header: str | None = None
+    payment_signature: str | None = None
 
 
 class SSEEvent(BaseModel):
@@ -37,61 +55,127 @@ class SSEEvent(BaseModel):
 # ─── Billing ──────────────────────────────────────────────────────────────────
 
 
+class ToolPricing(BaseModel):
+    tool_name: str
+    price_usdc: int
+    description: str
+
+
+class BillingPricingResponse(BaseModel):
+    tools: list[ToolPricing] = Field(default_factory=list)
+    base_cost_usdc: int = 0
+    updated_at: str = ""
+
+
+# Backward-compat alias
+PricingInfo = BillingPricingResponse
+
+
 class BillingBalance(BaseModel):
     org_id: str
     balance_usdc: int
+    reserved_usdc: int = 0
+    available_usdc: int = 0
+    updated_at: str = ""
 
 
-class PricingInfo(BaseModel):
-    billing_enabled: bool = False
-    pricing: dict[str, Any] | None = None
-    network: str | None = None
+# Spec alias
+CreditBalance = BillingBalance
+
+
+class BillingHistoryEntry(BaseModel):
+    run_id: str
+    user_id: str
+    amount_usdc: int
+    method: Literal["credit", "x402"]
+    status: Literal["pending", "settled", "failed"]
+    created_at: str
 
 
 class Invoice(BaseModel):
-    id: str
     run_id: str
-    user_id: str
-    org_id: str
     tokens_in: int = 0
     tokens_out: int = 0
     tool_calls: int = 0
-    cost_usdc: int = 0
-    created_at: datetime | None = None
+    total_usdc: int = 0
+    breakdown: list[dict[str, Any]] = Field(default_factory=list)
+    settled_at: str = ""
 
 
 class CreditHistoryEntry(BaseModel):
     id: str
-    org_id: str
-    operation: str
     amount_usdc: int
-    balance_usdc_after: int
-    reason: str = ""
-    created_at: datetime | None = None
+    method: Literal["stripe", "usdc", "admin"]
+    reference: str | None = None
+    created_at: str
+
+
+class StripeTopupRequest(BaseModel):
+    amount_usdc: int
+    success_url: str
+    cancel_url: str
+
+
+class StripeTopupResponse(BaseModel):
+    session_id: str
+    checkout_url: str
+
+
+class StripeTopupStatusResponse(BaseModel):
+    session_id: str
+    status: Literal["open", "complete", "expired"]
+    amount_usdc: int | None = None
+
+
+class UsdcTopupRequirements(BaseModel):
+    payto_address: str
+    token_address: str
+    network: str
+    chain_id: int
+    min_amount_usdc: int
+    authorization_type: str = "EIP-3009"
+
+
+class UsdcTopupRequest(BaseModel):
+    amount_usdc: int
+    authorization: str
+    signature: str
+    tx_hash: str | None = None
 
 
 # ─── Usage ────────────────────────────────────────────────────────────────────
 
 
 class UsageSummary(BaseModel):
+    user_id: str = ""
+    org_id: str = ""
+    period_from: str = ""
+    period_to: str = ""
     total_runs: int = 0
     total_tokens_in: int = 0
     total_tokens_out: int = 0
     total_tool_calls: int = 0
-    total_duration_ms: int = 0
+    total_cost_usdc: int = 0
 
 
 # ─── Wallets ──────────────────────────────────────────────────────────────────
 
 
+class LinkWalletRequest(BaseModel):
+    message: str
+    signature: str
+    nonce: str
+
+
 class Wallet(BaseModel):
     id: str
+    user_id: str
     address: str
     chain_id: int
-    user_id: str
-    org_id: str
     is_primary: bool = False
-    created_at: datetime | None = None
+    linked_at: str = ""
+
+    model_config = {"extra": "allow"}
 
 
 # ─── Agent Card ───────────────────────────────────────────────────────────────
@@ -108,36 +192,49 @@ class AgentCard(BaseModel):
     url: str = ""
     skills: list[dict[str, Any]] = Field(default_factory=list)
 
+    model_config = {"extra": "allow"}
 
-# ─── Custom Tools ─────────────────────────────────────────────────────────────
+
+# ─── Org Webhook Tools ────────────────────────────────────────────────────────
 
 
-class CreateCustomToolRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=64)
+class CreateOrgToolRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
     description: str = Field(..., min_length=1, max_length=500)
     input_schema: dict[str, Any] = Field(...)
     webhook_url: str = Field(..., max_length=2048)
-    webhook_method: str = Field(default="POST")
-    auth_header_name: str | None = Field(default=None, max_length=64)
-    auth_header_value: str | None = Field(default=None, max_length=4096)
-    timeout_seconds: int = Field(default=10, ge=1, le=30)
+    webhook_secret: str | None = None
 
 
-class CustomTool(BaseModel):
+# Backward-compat alias
+CreateCustomToolRequest = CreateOrgToolRequest
+
+
+class UpdateOrgToolRequest(BaseModel):
+    description: str | None = None
+    input_schema: dict[str, Any] | None = None
+    webhook_url: str | None = None
+    webhook_secret: str | None = None
+    is_active: bool | None = None
+
+
+class OrgTool(BaseModel):
     id: str
     org_id: str
     name: str
     description: str
     input_schema: dict[str, Any]
     webhook_url: str
-    webhook_method: str
     has_auth: bool
-    timeout_seconds: int
     is_active: bool
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
+    created_at: str = ""
+    updated_at: str = ""
 
     model_config = {"extra": "allow"}
+
+
+# Backward-compat alias
+CustomTool = OrgTool
 
 
 # ─── MCP Servers ──────────────────────────────────────────────────────────────
@@ -164,8 +261,8 @@ class OrgMcpServer(BaseModel):
     auth_header_name: str | None = None
     is_active: bool = True
     timeout_seconds: int = 15
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
+    created_at: str = ""
+    updated_at: str = ""
 
     model_config = {"extra": "allow"}
 
@@ -218,4 +315,66 @@ class DiscoverMcpToolsResponse(BaseModel):
     """Response from POST /mcp/servers/{server_id}/discover."""
 
     server_id: str
+    server_name: str = ""
     tools: list[McpToolDefinition]
+    discovered_at: str = ""
+
+
+# ─── Memory ───────────────────────────────────────────────────────────────────
+
+
+class StoreMemoryRequest(BaseModel):
+    content: str
+    metadata: dict[str, Any] | None = None
+    ttl_seconds: int | None = None
+
+
+class MemoryEntry(BaseModel):
+    id: str
+    org_id: str
+    content: str
+    metadata: dict[str, Any] | None = None
+    created_at: str = ""
+    expires_at: str | None = None
+
+
+class MemoryListResponse(BaseModel):
+    items: list[MemoryEntry]
+    total: int = 0
+    next_cursor: str | None = None
+
+
+# ─── Marketplace ──────────────────────────────────────────────────────────────
+
+
+class MarketplaceTool(BaseModel):
+    id: str
+    name: str
+    description: str
+    author_org_id: str
+    price_usdc: int
+    tags: list[str] = Field(default_factory=list)
+    mcp_server_url: str
+    is_active: bool = True
+    created_at: str = ""
+
+
+class AuthorConfig(BaseModel):
+    org_id: str
+    payout_address: str
+    is_verified: bool = False
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class EarningsEntry(BaseModel):
+    id: str
+    tool_name: str
+    amount_usdc: int
+    buyer_org_id: str
+    created_at: str = ""
+
+
+class WithdrawRequest(BaseModel):
+    amount_usdc: int
+    payout_address: str | None = None

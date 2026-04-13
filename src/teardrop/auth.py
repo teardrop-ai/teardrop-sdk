@@ -94,13 +94,13 @@ class TokenManager:
         return data.access_token
 
     async def authenticate_siwe(
-        self, client: httpx.AsyncClient, siwe_message: str, siwe_signature: str
+        self, client: httpx.AsyncClient, message: str, signature: str, nonce: str
     ) -> str:
         """Authenticate via a pre-signed SIWE message.
 
         Returns the JWT token and stores it for subsequent requests.
         """
-        body = {"siwe_message": siwe_message, "siwe_signature": siwe_signature}
+        body = {"message": message, "signature": signature, "nonce": nonce}
         resp = await client.post(f"{self._base_url}/token", json=body)
         if resp.status_code != 200:
             raise AuthenticationError(f"SIWE auth failed: {resp.status_code} {resp.text}")
