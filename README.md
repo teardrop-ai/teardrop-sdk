@@ -510,4 +510,4 @@ pytest
 pytest --cov=teardrop --cov-report=term-missing
 ```
 
-112 tests covering all client methods, streaming, auth, and models.
+112 tests covering client methods, streaming, auth, and models.
