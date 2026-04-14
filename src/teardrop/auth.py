@@ -100,7 +100,7 @@ class TokenManager:
 
         Returns the JWT token and stores it for subsequent requests.
         """
-        body = {"message": message, "signature": signature, "nonce": nonce}
+        body = {"siwe_message": message, "siwe_signature": signature, "nonce": nonce}
         resp = await client.post(f"{self._base_url}/token", json=body)
         if resp.status_code != 200:
             raise AuthenticationError(f"SIWE auth failed: {resp.status_code} {resp.text}")

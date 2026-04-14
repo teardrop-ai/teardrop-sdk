@@ -184,7 +184,7 @@ class AsyncTeardropClient:
             x402_payment_header=x402_payment_header,
             payment_signature=payment_signature,
         )
-        body = req.model_dump(exclude_none=True)
+        body = req.model_dump(by_alias=True, exclude_none=True)
 
         async with http.stream(
             "POST",

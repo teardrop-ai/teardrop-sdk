@@ -18,16 +18,22 @@ class TokenResponse(BaseModel):
 class JwtPayloadBase(BaseModel):
     """Decoded JWT payload returned by GET /auth/me."""
 
-    sub: str
-    org_id: str
-    role: Literal["admin", "member"]
-    auth_method: str
+    sub: str | None = None
+    user_id: str | None = None
+    org_id: str = ""
+    role: str = ""
+    auth_method: str = ""
     email: str | None = None
-    exp: int
-    iat: int
+    exp: int | None = None
+    iat: int | None = None
     # SIWE-specific fields (present when auth_method == "siwe")
     address: str | None = None
     chain_id: int | None = None
+
+    @property
+    def effective_sub(self) -> str | None:
+        """Return sub or user_id — whichever is present."""
+        return self.sub or self.user_id
 
     model_config = {"extra": "allow"}
 
@@ -36,7 +42,7 @@ class JwtPayloadBase(BaseModel):
 
 
 class AgentRunRequest(BaseModel):
-    prompt: str = Field(..., max_length=4096)
+    prompt: str = Field(..., max_length=4096, serialization_alias="message")
     thread_id: str = ""
     model: str | None = None
     x402_payment_header: str | None = None
@@ -169,7 +175,7 @@ class LinkWalletRequest(BaseModel):
 
 class Wallet(BaseModel):
     id: str
-    user_id: str
+    user_id: str | None = None
     address: str
     chain_id: int
     is_primary: bool = False
