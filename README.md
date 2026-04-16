@@ -265,6 +265,152 @@ summary = await client.get_usage(from_date="2026-04-01", to_date="2026-04-30")
 
 ---
 
+## LLM Configuration
+
+Customize which LLM provider and model the agent uses, enable bring-your-own-key (BYOK), or route to self-hosted endpoints. Configuration is org-scoped and persists across runs.
+
+### Get Current Config
+
+```python
+config = await client.get_llm_config()
+# → OrgLlmConfig(
+#     org_id=..., provider="anthropic", model="claude-haiku-4-5-20251001",
+#     has_api_key=False, api_base=None, max_tokens=4096, temperature=0.0,
+#     routing_preference="default", is_byok=False, created_at=..., updated_at=...
+#   )
+```
+
+Results are cached for 5 minutes.
+
+### Set LLM Config
+
+```python
+from teardrop import SetLlmConfigRequest
+
+config = await client.set_llm_config(
+    provider="anthropic",                          # "anthropic" | "openai" | "google"
+    model="claude-sonnet-4-20250514",
+    routing_preference="cost",                     # "default" | "cost" | "speed" | "quality"
+    api_key=None,                                  # optional BYOK key (TLS-only, never logged)
+    api_base=None,                                 # optional self-hosted endpoint (vLLM/Ollama)
+    max_tokens=4096,                               # 1–200,000
+    temperature=0.0,                               # 0.0–2.0
+    timeout_seconds=120,
+)
+```
+
+**Notes**:
+- Pass `api_key=None` (or omit) to preserve an existing stored key.
+- When `api_key` is provided, it is encrypted at rest and never returned (only `has_api_key: true` is visible).
+- `api_base` is validated for SSRF; private IPs are rejected unless the backend explicitly allows them.
+- `routing_preference="cost"` enables smart routing to find the cheapest model in a pool.
+- Cache is invalidated on successful update.
+
+### Delete LLM Config
+
+```python
+await client.delete_llm_config()
+# → {"status": "deleted"}
+```
+
+Reverts the org to global default LLM config. Returns `404` if no config exists (safe to call idempotently).
+
+### Supported Providers & Models
+
+```python
+providers = client.list_supported_providers()
+# → ["anthropic", "openai", "google"]
+
+models = client.list_models_for_provider("anthropic")
+# → ["claude-haiku-4-5-20251001", "claude-sonnet-4-20250514"]
+
+# Inspect the constant directly
+from teardrop import MODELS_BY_PROVIDER
+print(MODELS_BY_PROVIDER)
+```
+
+---
+
+## Model Benchmarks
+
+Browse model capabilities and operational metrics (latency, cost, throughput) across your org's usage.
+
+### Public Model Catalogue
+
+```python
+benchmarks = await client.get_model_benchmarks()  # no auth required
+# → ModelBenchmarksResponse(
+#     models=[
+#       ModelInfo(
+#         provider="anthropic",
+#         model="claude-haiku-4-5-20251001",
+#         display_name="Claude Haiku 4.5",
+#         context_window=200000,
+#         supports_tools=True,
+#         supports_streaming=True,
+#         quality_tier=2,
+#         pricing=ModelPricing(
+#           tokens_in_cost_per_1k=0.08,
+#           tokens_out_cost_per_1k=0.24,
+#           tool_call_cost=0.0
+#         ),
+#         benchmarks=ModelRunBenchmarks(
+#           total_runs_7d=1250,
+#           avg_latency_ms=485.5,
+#           p95_latency_ms=1200.0,
+#           avg_cost_usdc_per_run=12.5,
+#           avg_tokens_per_sec=45.2
+#         )
+#       ),
+#       ...
+#     ],
+#     updated_at="2026-04-16T12:00:00Z"
+#   )
+```
+
+**Notes**:
+- Results are cached for 10 minutes.
+- `benchmarks` field is `None` for models with < 10 runs in the 7-day window.
+- `pricing` is always present (sourced from current pricing rules).
+
+### Org-Scoped Benchmarks
+
+```python
+org_benchmarks = await client.get_org_model_benchmarks()  # auth required
+```
+
+Same response structure as public benchmarks, but filtered to your org's usage only. **Not cached** — always fresh query. Returns empty model list if org has no usage data.
+
+### Use Case: Choosing Models
+
+```python
+benchmarks = await client.get_model_benchmarks()
+
+# Find cheapest
+cheapest = min(
+    (m for m in benchmarks.models if m.benchmarks),
+    key=lambda m: m.pricing.tokens_in_cost_per_1k + m.pricing.tokens_out_cost_per_1k
+)
+
+# Find fastest
+fastest = min(
+    (m for m in benchmarks.models if m.benchmarks),
+    key=lambda m: m.benchmarks.avg_latency_ms
+)
+
+print(f"Cheapest: {cheapest.model}")
+print(f"Fastest: {fastest.model}")
+
+# Configure agent to use cheapest
+await client.set_llm_config(
+    provider=cheapest.provider,
+    model=cheapest.model,
+    routing_preference="cost",
+)
+```
+
+---
+
 ## Wallets
 
 Link Ethereum wallets to a user account for USDC payments and SIWE authentication.
@@ -482,6 +628,8 @@ All request/response types are Pydantic v2 models exported from `teardrop`.
 | `StripeTopupRequest`, `StripeTopupResponse`, `StripeTopupStatusResponse` | `topup_stripe()`, `get_stripe_topup_status()` |
 | `UsdcTopupRequirements`, `UsdcTopupRequest` | `get_usdc_topup_requirements()`, `topup_usdc()` |
 | `UsageSummary` | `get_usage()` |
+| `OrgLlmConfig`, `SetLlmConfigRequest`, `ProviderType`, `RoutingPreference` | LLM config CRUD |
+| `ModelBenchmarksResponse`, `ModelInfo`, `ModelPricing`, `ModelRunBenchmarks` | `get_model_benchmarks()`, `get_org_model_benchmarks()` |
 | `Wallet`, `LinkWalletRequest` | `get_wallets()`, `link_wallet()` |
 | `AgentCard` | `get_agent_card()` |
 | `OrgTool`, `CreateOrgToolRequest`, `UpdateOrgToolRequest` | tool CRUD |
@@ -492,7 +640,7 @@ All request/response types are Pydantic v2 models exported from `teardrop`.
 Import any model directly:
 
 ```python
-from teardrop import CreateMcpServerRequest, OrgTool, BillingBalance
+from teardrop import OrgLlmConfig, ModelBenchmarksResponse, BillingBalance
 ```
 
 ---
@@ -510,4 +658,4 @@ pytest
 pytest --cov=teardrop --cov-report=term-missing
 ```
 
-112 tests covering client methods, streaming, auth, and models.
+139 tests covering client methods, streaming, auth, models, and LLM configuration.

@@ -36,12 +36,16 @@ from teardrop.models import (
     Invoice,
     JwtPayloadBase,
     LinkWalletRequest,
+    MODELS_BY_PROVIDER,
     MarketplaceTool,
     MemoryEntry,
     MemoryListResponse,
+    ModelBenchmarksResponse,
+    OrgLlmConfig,
     OrgMcpServer,
     OrgTool,
     SSEEvent,
+    SetLlmConfigRequest,
     StoreMemoryRequest,
     StripeTopupRequest,
     StripeTopupResponse,
@@ -62,6 +66,10 @@ from teardrop.streaming import iter_sse_events
 _AGENT_CARD_TTL: int = 300
 # Upper bound on the agent-card response body (64 KB).  Blocks memory-bomb payloads.
 _AGENT_CARD_MAX_BYTES: int = 65_536
+# Seconds before a cached org LLM config is considered stale.
+_LLM_CONFIG_TTL: int = 300
+# Seconds before a cached public model benchmarks response is considered stale.
+_MODEL_BENCHMARKS_TTL: int = 600
 
 
 class AsyncTeardropClient:
@@ -102,6 +110,10 @@ class AsyncTeardropClient:
         self._agent_card: AgentCard | None = None
         self._agent_card_fetched_at: float = 0.0
         self._agent_card_lock: anyio.Lock = anyio.Lock()
+        # LLM config cache (keyed by org_id for clarity; stores (OrgLlmConfig, timestamp))
+        self._llm_config_cache: tuple[OrgLlmConfig, float] | None = None
+        # Public model benchmarks cache
+        self._model_benchmarks_cache: tuple[ModelBenchmarksResponse, float] | None = None
 
     async def _get_http(self) -> httpx.AsyncClient:
         if self._http is None or self._http.is_closed:
@@ -708,6 +720,163 @@ class AsyncTeardropClient:
         self._raise_for_status(resp)
         return resp.json()
 
+    # ─── LLM Config ───────────────────────────────────────────────────────────
+
+    async def get_llm_config(self) -> OrgLlmConfig:
+        """GET /llm-config — fetch the org's current LLM configuration.
+
+        Results are cached for 5 minutes; the cache is invalidated whenever
+        ``set_llm_config`` or ``delete_llm_config`` succeeds.
+        """
+        now = time.time()
+        if (
+            self._llm_config_cache is not None
+            and now < self._llm_config_cache[1] + _LLM_CONFIG_TTL
+        ):
+            return self._llm_config_cache[0]
+
+        http = await self._get_http()
+        resp = await http.get(f"{self._base_url}/llm-config", headers=await self._headers())
+        self._raise_for_status(resp)
+        config = OrgLlmConfig.model_validate(resp.json())
+        self._llm_config_cache = (config, now)
+        return config
+
+    async def set_llm_config(
+        self,
+        *,
+        provider: str,
+        model: str,
+        routing_preference: str = "default",
+        api_key: str | None = None,
+        api_base: str | None = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.0,
+        timeout_seconds: int = 120,
+    ) -> OrgLlmConfig:
+        """PUT /llm-config — create or update the org's LLM configuration.
+
+        Args:
+            provider: LLM provider — ``"anthropic"``, ``"openai"``, or ``"google"``.
+            model: Model identifier (e.g. ``"claude-haiku-4-5-20251001"``).
+            routing_preference: ``"default"``, ``"cost"``, ``"speed"``, or ``"quality"``.
+            api_key: Optional BYOK API key.  If ``None``, the existing stored
+                key is preserved (field is omitted from the request).  Sent
+                over TLS only; never logged.
+            api_base: Optional self-hosted endpoint URL (vLLM / Ollama / OpenRouter).
+            max_tokens: Maximum tokens per response (1–200 000, default 4096).
+            temperature: Sampling temperature (0–2, default 0.0).
+            timeout_seconds: Per-request timeout in seconds (default 120).
+
+        Returns:
+            Updated :class:`OrgLlmConfig`.
+
+        Raises:
+            :exc:`~teardrop.exceptions.ValidationError`: ``provider`` or
+                ``routing_preference`` is invalid, or ``temperature`` /
+                ``max_tokens`` is out of range.
+            :exc:`~teardrop.exceptions.APIError`: ``api_base`` fails SSRF
+                validation (status 400).
+        """
+        # Validate locally before the network round-trip so the error message
+        # includes which enum values are valid.
+        request = SetLlmConfigRequest(
+            provider=provider,  # type: ignore[arg-type]
+            model=model,
+            api_key=api_key,
+            api_base=api_base,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout_seconds=timeout_seconds,
+            routing_preference=routing_preference,  # type: ignore[arg-type]
+        )
+        # api_key is excluded when None so the server preserves the existing key.
+        body = request.model_dump(exclude_none=True)
+
+        http = await self._get_http()
+        resp = await http.put(
+            f"{self._base_url}/llm-config",
+            json=body,
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        config = OrgLlmConfig.model_validate(resp.json())
+        # Invalidate cache with the fresh value.
+        self._llm_config_cache = (config, time.time())
+        return config
+
+    async def delete_llm_config(self) -> dict[str, Any]:
+        """DELETE /llm-config — remove the org's custom LLM config.
+
+        Reverts to the global default configuration.  Returns
+        ``{"status": "deleted"}`` on success.  If no config exists, the server
+        returns 404 which the SDK re-raises as :exc:`~teardrop.exceptions.NotFoundError`.
+        """
+        http = await self._get_http()
+        resp = await http.delete(f"{self._base_url}/llm-config", headers=await self._headers())
+        self._raise_for_status(resp)
+        # Invalidate cache.
+        self._llm_config_cache = None
+        return resp.json()
+
+    # ─── Models / Benchmarks ──────────────────────────────────────────────────
+
+    async def get_model_benchmarks(self) -> ModelBenchmarksResponse:
+        """GET /models/benchmarks — public model catalogue with live metrics.
+
+        No authentication required.  Results are cached for 10 minutes (the
+        server also applies a 15-minute cache, so this is advisory only).
+        """
+        now = time.time()
+        if (
+            self._model_benchmarks_cache is not None
+            and now < self._model_benchmarks_cache[1] + _MODEL_BENCHMARKS_TTL
+        ):
+            return self._model_benchmarks_cache[0]
+
+        http = await self._get_http()
+        resp = await http.get(f"{self._base_url}/models/benchmarks")
+        self._raise_for_status(resp)
+        result = ModelBenchmarksResponse.model_validate(resp.json())
+        self._model_benchmarks_cache = (result, now)
+        return result
+
+    async def get_org_model_benchmarks(self) -> ModelBenchmarksResponse:
+        """GET /models/benchmarks/org — model benchmarks scoped to the caller's org.
+
+        Auth required.  Results are **not** cached (always a fresh query).
+        """
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/models/benchmarks/org", headers=await self._headers()
+        )
+        self._raise_for_status(resp)
+        return ModelBenchmarksResponse.model_validate(resp.json())
+
+    def list_supported_providers(self) -> list[str]:
+        """Return the list of supported LLM providers (client-side constant).
+
+        Returns:
+            ``["anthropic", "openai", "google"]``
+        """
+        return list(MODELS_BY_PROVIDER.keys())
+
+    def list_models_for_provider(self, provider: str) -> list[str]:
+        """Return known model identifiers for *provider* (client-side constant).
+
+        Args:
+            provider: One of ``"anthropic"``, ``"openai"``, or ``"google"``.
+
+        Raises:
+            :exc:`ValueError`: Unknown provider.
+        """
+        if provider not in MODELS_BY_PROVIDER:
+            raise ValueError(
+                f"Unknown provider {provider!r}. "
+                f"Supported: {list(MODELS_BY_PROVIDER.keys())}"
+            )
+        return list(MODELS_BY_PROVIDER[provider])
+
     # ─── Factory ──────────────────────────────────────────────────────────
 
     @classmethod
@@ -902,6 +1071,31 @@ class TeardropClient:
 
     def withdraw(self, request: WithdrawRequest) -> dict[str, Any]:
         return self._run(self._async.withdraw(request))
+
+    # ─── LLM Config ───────────────────────────────────────────────────────────
+
+    def get_llm_config(self) -> OrgLlmConfig:
+        return self._run(self._async.get_llm_config())
+
+    def set_llm_config(self, **kwargs: Any) -> OrgLlmConfig:
+        return self._run(self._async.set_llm_config(**kwargs))
+
+    def delete_llm_config(self) -> dict[str, Any]:
+        return self._run(self._async.delete_llm_config())
+
+    # ─── Models / Benchmarks ──────────────────────────────────────────────────
+
+    def get_model_benchmarks(self) -> ModelBenchmarksResponse:
+        return self._run(self._async.get_model_benchmarks())
+
+    def get_org_model_benchmarks(self) -> ModelBenchmarksResponse:
+        return self._run(self._async.get_org_model_benchmarks())
+
+    def list_supported_providers(self) -> list[str]:
+        return self._async.list_supported_providers()
+
+    def list_models_for_provider(self, provider: str) -> list[str]:
+        return self._async.list_models_for_provider(provider)
 
     def close(self) -> None:
         if self._portal is not None:
