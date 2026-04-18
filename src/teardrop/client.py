@@ -864,7 +864,7 @@ class AsyncTeardropClient:
         """PUT /llm-config — create or update the org's LLM configuration.
 
         Args:
-            provider: LLM provider — ``"anthropic"``, ``"openai"``, or ``"google"``.
+            provider: LLM provider — ``"anthropic"``, ``"openai"``, ``"google"``, or ``"openrouter"``.
             model: Model identifier (e.g. ``"claude-haiku-4-5-20251001"``).
             routing_preference: ``"default"``, ``"cost"``, ``"speed"``, or ``"quality"``.
             api_key: Optional BYOK API key.  If ``None``, the existing stored
