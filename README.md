@@ -73,11 +73,27 @@ async with AsyncTeardropClient("https://api.teardrop.dev") as client:
     nonce = nonce_resp["nonce"]
 
     # 2. Build and sign an EIP-4361 message client-side (e.g. with siwe-py)
+    #    Embed the nonce in the SIWE message body
     message = build_siwe_message(nonce=nonce, ...)
     signature = wallet.sign_message(message)
 
     # 3. Exchange for a JWT — stored automatically for subsequent calls
-    token = await client.authenticate_siwe(message, signature, nonce)
+    token = await client.authenticate_siwe(message, signature)
+```
+
+### Email Registration
+
+```python
+tokens = await client.register(email="you@example.com", password="...")
+# Verify email before first login
+await client.verify_email(token=email_token)
+```
+
+### Token Refresh / Logout
+
+```python
+new_tokens = await client.refresh(refresh_token)
+await client.logout(refresh_token)
 ```
 
 ### Inspect Identity
@@ -102,7 +118,28 @@ async for event in client.run(
 
 `run()` is an async generator that yields `SSEEvent` objects. The sync equivalent `run_sync()` blocks and returns `list[SSEEvent]`.
 
-### SSEEvent
+### Passing Context
+
+```python
+async for event in client.run(
+    "Summarise the top DeFi news today",
+    context={"user_timezone": "Europe/Berlin"},   # optional extra context dict
+    thread_id="conv-abc123",
+):
+    ...
+```
+
+### x402 On-chain Payments
+
+If the agent returns a `402 Payment Required` the SDK raises `PaymentRequiredError`. Resolve the payment externally and retry passing the x402 payment header:
+
+```python
+async for event in client.run(
+    "...",
+    payment_header="...",   # X-Payment header value from 402 response
+):
+    ...
+```
 
 ```python
 class SSEEvent:
@@ -117,7 +154,9 @@ class SSEEvent:
 | `event.type` | `event.data` keys | Notes |
 |---|---|---|
 | `RUN_STARTED` | `run_id`, `thread_id` | First event of every run |
+| `TEXT_MESSAGE_START` | `message_id` | Streaming text turn begins |
 | `TEXT_MESSAGE_CONTENT` | `delta` | Streaming text chunk |
+| `TEXT_MESSAGE_END` | `message_id` | Streaming text turn ends |
 | `TOOL_CALL_START` | `tool_call_id`, `tool_name`, `args` | Agent is calling a tool |
 | `TOOL_CALL_END` | `tool_call_id`, `result` | Tool returned |
 | `SURFACE_UPDATE` | `surface`, `content` | UI surface payload |
@@ -126,15 +165,14 @@ class SSEEvent:
 | `ERROR` | `message`, `code` | Non-fatal error during run |
 | `DONE` | *(empty)* | Stream complete |
 
-### x402 Payments
+### x402 On-chain Payments
 
-If the agent returns a `402 Payment Required` the SDK raises `PaymentRequiredError`. Resolve the payment externally and retry with:
+If the agent returns a `402 Payment Required` the SDK raises `PaymentRequiredError`. Resolve the payment externally and retry passing the x402 payment header:
 
 ```python
 async for event in client.run(
-    prompt,
-    x402_payment_header="...",   # value from 402 response
-    payment_signature="...",     # EIP-3009 signature
+    "...",
+    payment_header="...",   # X-Payment header value from 402 response
 ):
     ...
 ```
@@ -181,10 +219,16 @@ except PaymentRequiredError as e:
 
 ```python
 balance = await client.get_balance()
-# → BillingBalance(org_id=..., balance_usdc=5000, reserved_usdc=200, available_usdc=4800)
+# → BillingBalance(org_id=..., balance_usdc=5000, spending_limit_usdc=10000, is_paused=False)
 ```
 
-USDC amounts are in atomic units (micro-USDC, 6 decimals). Divide by `1_000_000` for human-readable USDC.
+USDC amounts are in atomic units (6 decimals). Use `format_usdc()` / `parse_usdc()` helpers:
+
+```python
+from teardrop import format_usdc, parse_usdc
+print(format_usdc(5_000_000))  # → "5.000000"
+print(parse_usdc("1.50"))      # → 1500000
+```
 
 ### Pricing
 
@@ -197,16 +241,14 @@ for tool in pricing.tools:
 ### Billing History
 
 ```python
-page = await client.get_billing_history(limit=50)
-entries: list[BillingHistoryEntry] = page["items"]
-cursor = page.get("next_cursor")        # pass to next call to paginate
+entries: list[BillingHistoryEntry] = await client.get_billing_history(limit=50)
 ```
 
 ### Invoices
 
 ```python
-# Paginated list
-page = await client.get_invoices(limit=20, cursor=cursor)
+# Flat list
+invoices: list[Invoice] = await client.get_invoices(limit=20)
 
 # Single run invoice
 invoice = await client.get_invoice(run_id)
@@ -216,8 +258,7 @@ invoice = await client.get_invoice(run_id)
 ### Credit History
 
 ```python
-page = await client.get_credit_history()
-entries: list[CreditHistoryEntry] = page["items"]
+entries: list[CreditHistoryEntry] = await client.get_credit_history(operation="topup")
 ```
 
 ### Stripe Top-up
@@ -226,41 +267,38 @@ entries: list[CreditHistoryEntry] = page["items"]
 from teardrop import StripeTopupRequest
 
 resp = await client.topup_stripe(StripeTopupRequest(
-    amount_usdc=10_000_000,            # 10 USDC
-    success_url="https://app.example.com/billing?success=1",
-    cancel_url="https://app.example.com/billing",
+    amount_cents=1000,                             # $10.00 in cents
+    return_url="https://app.example.com/billing",
 ))
-# Redirect user to resp.checkout_url
+# resp.client_secret — pass to Stripe.js to confirm payment
+# resp.session_id   — use to poll status
 
 # Poll for completion
 status = await client.get_stripe_topup_status(resp.session_id)
-# → StripeTopupStatusResponse(status="complete"|"open"|"expired", amount_usdc=...)
+# → StripeTopupStatusResponse(status="complete"|"open"|"expired", new_balance_fmt="$15.00")
 ```
 
-### USDC Top-up (on-chain EIP-3009)
+### USDC Top-up (on-chain x402)
 
 ```python
 from teardrop import UsdcTopupRequest
 
-reqs = await client.get_usdc_topup_requirements()
-# → UsdcTopupRequirements(payto_address=..., token_address=..., network=..., chain_id=...,
-#                         min_amount_usdc=..., authorization_type="EIP-3009")
+# Fetch payment requirements for a given amount
+reqs = await client.get_usdc_topup_requirements(amount_usdc=5_000_000)
+# → UsdcTopupRequirements(accepts=[{...}], x402Version=2)
 
 result = await client.topup_usdc(UsdcTopupRequest(
     amount_usdc=5_000_000,
-    authorization="...",    # EIP-3009 signed authorization
-    signature="...",
-    tx_hash="0x...",        # optional
+    payment_header="...",   # x402 payment header value
 ))
-# → {"credited_usdc": 5000000}
 ```
 
 ### Usage Summary
 
 ```python
-summary = await client.get_usage(from_date="2026-04-01", to_date="2026-04-30")
+summary = await client.get_usage(start="2026-04-01", end="2026-04-30")
 # → UsageSummary(total_runs=..., total_tokens_in=..., total_tokens_out=...,
-#                total_tool_calls=..., total_cost_usdc=...)
+#                total_tool_calls=..., total_duration_ms=...)
 ```
 
 ---
@@ -288,7 +326,7 @@ Results are cached for 5 minutes.
 from teardrop import SetLlmConfigRequest
 
 config = await client.set_llm_config(
-    provider="anthropic",                          # "anthropic" | "openai" | "google"
+    provider="anthropic",                          # "anthropic" | "openai" | "google" | "openrouter"
     model="claude-sonnet-4-20250514",
     routing_preference="cost",                     # "default" | "cost" | "speed" | "quality"
     api_key=None,                                  # optional BYOK key (TLS-only, never logged)
@@ -319,7 +357,7 @@ Reverts the org to global default LLM config. Returns `404` if no config exists 
 
 ```python
 providers = client.list_supported_providers()
-# → ["anthropic", "openai", "google"]
+# → ["anthropic", "openai", "google", "openrouter"]
 
 models = client.list_models_for_provider("anthropic")
 # → ["claude-haiku-4-5-20251001", "claude-sonnet-4-20250514"]
@@ -418,11 +456,9 @@ Link Ethereum wallets to a user account for USDC payments and SIWE authenticatio
 ```python
 from teardrop import LinkWalletRequest
 
-# nonce + message + signature follow same SIWE pattern as login
 wallet = await client.link_wallet(LinkWalletRequest(
-    message="...",
-    signature="...",
-    nonce="...",
+    siwe_message="...",
+    siwe_signature="...",
 ))
 
 wallets: list[Wallet] = await client.get_wallets()
@@ -453,7 +489,12 @@ tool = await client.create_tool(CreateOrgToolRequest(
         "required": ["to", "subject", "body"],
     },
     webhook_url="https://hooks.example.com/email",
-    webhook_secret="whsec_...",             # optional HMAC secret
+    webhook_method="POST",                  # optional, default POST
+    auth_header_name="X-Webhook-Secret",   # optional auth header
+    auth_header_value="whsec_...",
+    timeout_seconds=10,
+    publish_as_mcp=False,                  # expose on marketplace as MCP tool
+    base_price_usdc=0,                     # price if published
 ))
 
 tools: list[OrgTool] = await client.list_tools()
@@ -541,13 +582,10 @@ Store and retrieve persistent memory entries scoped to the org. The agent can re
 from teardrop import StoreMemoryRequest
 
 entry = await client.create_memory(StoreMemoryRequest(
-    content="User prefers responses in Spanish.",
-    metadata={"user_id": "usr_123"},
-    ttl_seconds=86400,          # optional TTL; omit for persistent
+    content="User prefers responses in Spanish.",  # 1–500 characters
 ))
 
-page = await client.list_memories(limit=50)
-entries: list[MemoryEntry] = page.items
+entries: list[MemoryEntry] = await client.list_memories(limit=50)
 
 await client.delete_memory(entry.id)
 ```
@@ -561,16 +599,31 @@ Browse, publish, and monetise tools on the Teardrop marketplace.
 ### Browsing (no auth required)
 
 ```python
-page = await client.get_marketplace_catalog(limit=20, tags=["defi", "payments"])
-tools: list[MarketplaceTool] = page["items"]
+catalog = await client.get_marketplace_catalog(limit=20)
+tools: list[MarketplaceTool] = catalog["tools"]
+```
+
+### Subscriptions
+
+```python
+from teardrop import parse_marketplace_tool_name
+
+# Subscribe to a tool by qualified name (org_slug/tool_name)
+sub = await client.subscribe("acme/web_search")
+subs = await client.get_subscriptions()
+await client.unsubscribe(sub.id)
+
+# Parse a qualified tool name
+parsed = parse_marketplace_tool_name("acme/web_search")
+# → {"org_slug": "acme", "tool_name": "web_search"}
 ```
 
 ### Author Configuration
 
 ```python
-config = await client.set_author_config(payout_address="0xYourWallet")
+config = await client.set_author_config(settlement_wallet="0xYourWallet")
 config = await client.get_author_config()
-# → AuthorConfig(org_id=..., payout_address=..., is_verified=...)
+# → AuthorConfig(org_id=..., settlement_wallet="0x...")
 ```
 
 ### Earnings & Withdrawal
@@ -579,14 +632,53 @@ config = await client.get_author_config()
 balance = await client.get_marketplace_balance()
 # → {"balance_usdc": 1500000, ...}
 
-page = await client.get_earnings(limit=50)
-entries: list[EarningsEntry] = page["items"]
+earnings: list[EarningsEntry] = await client.get_earnings(limit=50)
 
 from teardrop import WithdrawRequest
-result = await client.withdraw(WithdrawRequest(
-    amount_usdc=1_000_000,
-    payout_address="0xOptionalOverride",   # omit to use author config address
+result = await client.withdraw(WithdrawRequest(amount_usdc=1_000_000))
+
+# Withdrawal history
+withdrawals = await client.get_withdrawals(limit=20)
+```
+
+---
+
+## A2A Delegation
+
+Allow other organisations' agents to call your agent on behalf of their users.
+
+```python
+from teardrop import AddTrustedAgentRequest
+
+# Grant delegation rights to an org
+agent = await client.add_trusted_agent(AddTrustedAgentRequest(
+    org_id="org-partner-abc",
+    permissions=["run"],
 ))
+
+agents: list[TrustedAgent] = await client.list_trusted_agents()
+
+await client.remove_trusted_agent(agent.id)
+
+# View delegation event history
+delegations = await client.get_delegations(limit=20)
+```
+
+---
+
+## Agent Wallets
+
+Provision a CDP smart wallet for the org's agent, enabling it to sign transactions autonomously.
+
+```python
+wallet = await client.provision_agent_wallet()
+# \u2192 AgentWallet(id=..., address=\"0x...\", network=\"base\", status=\"active\")
+
+# Fetch with live on-chain balance
+wallet = await client.get_agent_wallet(include_balance=True)
+
+# Deactivate (admin only)
+await client.deactivate_agent_wallet()
 ```
 
 ---
@@ -617,10 +709,10 @@ All request/response types are Pydantic v2 models exported from `teardrop`.
 
 | Model | Used by |
 |---|---|
-| `JwtPayloadBase` | `get_me()` |
+| `JwtPayloadBase`, `TokenResponse` | `get_me()`, `register()`, `refresh()` |
 | `AgentRunRequest` | `run()` (internal) |
 | `SSEEvent` | `run()` yields |
-| `BillingBalance` | `get_balance()` |
+| `CreditBalance` / `BillingBalance` | `get_balance()` |
 | `BillingPricingResponse`, `ToolPricing` | `get_pricing()` |
 | `BillingHistoryEntry` | `get_billing_history()` |
 | `Invoice` | `get_invoices()`, `get_invoice()` |
@@ -634,8 +726,10 @@ All request/response types are Pydantic v2 models exported from `teardrop`.
 | `AgentCard` | `get_agent_card()` |
 | `OrgTool`, `CreateOrgToolRequest`, `UpdateOrgToolRequest` | tool CRUD |
 | `OrgMcpServer`, `CreateMcpServerRequest`, `UpdateMcpServerRequest`, `DiscoverMcpToolsResponse`, `McpToolDefinition` | MCP CRUD |
-| `MemoryEntry`, `MemoryListResponse`, `StoreMemoryRequest` | memory CRUD |
-| `MarketplaceTool`, `AuthorConfig`, `EarningsEntry`, `WithdrawRequest` | marketplace |
+| `MemoryEntry`, `StoreMemoryRequest` | memory CRUD |
+| `MarketplaceTool`, `MarketplaceSubscription`, `AuthorConfig`, `EarningsEntry`, `WithdrawRequest` | marketplace |
+| `AddTrustedAgentRequest`, `TrustedAgent` | A2A delegation |
+| `AgentWallet` | agent wallets |
 
 Import any model directly:
 
