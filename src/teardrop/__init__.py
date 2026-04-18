@@ -14,8 +14,10 @@ from teardrop.exceptions import (
     ValidationError,
 )
 from teardrop.models import (
+    AddTrustedAgentRequest,
     AgentCard,
     AgentRunRequest,
+    AgentWallet,
     AuthorConfig,
     BillingBalance,
     BillingHistoryEntry,
@@ -30,11 +32,11 @@ from teardrop.models import (
     JwtPayloadBase,
     LinkWalletRequest,
     MODELS_BY_PROVIDER,
+    MarketplaceSubscription,
     MarketplaceTool,
     McpServerAuthType,
     McpToolDefinition,
     MemoryEntry,
-    MemoryListResponse,
     ModelBenchmarksResponse,
     ModelInfo,
     ModelPricing,
@@ -53,6 +55,7 @@ from teardrop.models import (
     StripeTopupStatusResponse,
     TokenResponse,
     ToolPricing,
+    TrustedAgent,
     UpdateMcpServerRequest,
     UpdateOrgToolRequest,
     UsdcTopupRequest,
@@ -72,13 +75,18 @@ from teardrop.streaming import (
     EVENT_RUN_STARTED,
     EVENT_SURFACE_UPDATE,
     EVENT_TEXT_MSG_CONTENT,
+    EVENT_TEXT_MSG_END,
+    EVENT_TEXT_MSG_START,
     EVENT_TOOL_CALL_END,
     EVENT_TOOL_CALL_START,
     EVENT_USAGE_SUMMARY,
     async_collect_text,
     collect_text,
+    format_usdc,
     iter_sse_events,
+    parse_marketplace_tool_name,
     parse_mcp_tool_name,
+    parse_usdc,
 )
 
 __all__ = [
@@ -122,13 +130,18 @@ __all__ = [
     "DiscoverMcpToolsResponse",
     # Models - memory
     "MemoryEntry",
-    "MemoryListResponse",
     "StoreMemoryRequest",
     # Models - marketplace
     "AuthorConfig",
     "EarningsEntry",
+    "MarketplaceSubscription",
     "MarketplaceTool",
     "WithdrawRequest",
+    # Models - A2A
+    "AddTrustedAgentRequest",
+    "TrustedAgent",
+    # Models - agent wallets
+    "AgentWallet",
     # Models - LLM config
     "OrgLlmConfig",
     "SetLlmConfigRequest",
@@ -157,8 +170,11 @@ __all__ = [
     # Streaming
     "async_collect_text",
     "collect_text",
+    "format_usdc",
     "iter_sse_events",
+    "parse_marketplace_tool_name",
     "parse_mcp_tool_name",
+    "parse_usdc",
     "EVENT_BILLING_SETTLEMENT",
     "EVENT_DONE",
     "EVENT_ERROR",
@@ -166,6 +182,8 @@ __all__ = [
     "EVENT_RUN_STARTED",
     "EVENT_SURFACE_UPDATE",
     "EVENT_TEXT_MSG_CONTENT",
+    "EVENT_TEXT_MSG_END",
+    "EVENT_TEXT_MSG_START",
     "EVENT_TOOL_CALL_END",
     "EVENT_TOOL_CALL_START",
     "EVENT_USAGE_SUMMARY",

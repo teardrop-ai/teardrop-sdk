@@ -18,6 +18,8 @@ EVENT_TOOL_CALL_END = "TOOL_CALL_END"
 EVENT_SURFACE_UPDATE = "SURFACE_UPDATE"
 EVENT_USAGE_SUMMARY = "USAGE_SUMMARY"
 EVENT_BILLING_SETTLEMENT = "BILLING_SETTLEMENT"
+EVENT_TEXT_MSG_START = "TEXT_MESSAGE_START"
+EVENT_TEXT_MSG_END = "TEXT_MESSAGE_END"
 EVENT_ERROR = "ERROR"
 EVENT_DONE = "DONE"
 
@@ -185,4 +187,63 @@ def parse_mcp_tool_name(tool_name: str) -> _McpToolMatch | _McpToolNoMatch:
             "tool": tool_name[idx + len(_MCP_SEPARATOR) :],
         }
     return {"is_mcp": False}
+
+
+# ─── Marketplace tool name utilities ──────────────────────────────────────────
+
+_MARKETPLACE_SEPARATOR = "/"
+
+
+def parse_marketplace_tool_name(qualified_name: str) -> dict[str, str]:
+    """Parse a qualified marketplace tool name into its components.
+
+    Marketplace tools use ``org_slug/tool_name`` format.
+
+    Returns a dict with ``org_slug`` and ``tool_name``.
+
+    Raises:
+        :exc:`ValueError`: If the name does not contain a ``/`` separator.
+
+    Examples::
+
+        parse_marketplace_tool_name("acme/web_search")
+        # → {"org_slug": "acme", "tool_name": "web_search"}
+    """
+    idx = qualified_name.find(_MARKETPLACE_SEPARATOR)
+    if idx <= 0:
+        raise ValueError(
+            f"Invalid qualified tool name {qualified_name!r}: "
+            "expected 'org_slug/tool_name' format"
+        )
+    return {
+        "org_slug": qualified_name[:idx],
+        "tool_name": qualified_name[idx + 1 :],
+    }
+
+
+# ─── USDC formatting helpers ─────────────────────────────────────────────────
+
+_USDC_DECIMALS = 6
+
+
+def format_usdc(atomic: int) -> str:
+    """Convert atomic USDC (6 decimals) to human-readable dollar string.
+
+    Examples::
+
+        format_usdc(1_500_000)  # → "1.500000"
+        format_usdc(50)         # → "0.000050"
+    """
+    return f"{atomic / 10 ** _USDC_DECIMALS:.{_USDC_DECIMALS}f}"
+
+
+def parse_usdc(dollars: str | float) -> int:
+    """Convert a dollar amount to atomic USDC (6 decimals).
+
+    Examples::
+
+        parse_usdc("1.50")  # → 1_500_000
+        parse_usdc(0.25)    # → 250_000
+    """
+    return int(round(float(dollars) * 10 ** _USDC_DECIMALS))
 

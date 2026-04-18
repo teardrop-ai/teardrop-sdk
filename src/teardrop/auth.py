@@ -44,6 +44,7 @@ class TokenManager:
         self._client_id = client_id
         self._client_secret = client_secret
         self._token = token
+        self._refresh_token: str | None = None
         self._expires_at: float = 0.0
 
         if token:
@@ -91,22 +92,27 @@ class TokenManager:
 
         data = TokenResponse.model_validate(resp.json())
         logger.debug("Token acquired, expires_in=%s", data.expires_in)
+        if data.refresh_token:
+            self._refresh_token = data.refresh_token
         return data.access_token
 
     async def authenticate_siwe(
-        self, client: httpx.AsyncClient, message: str, signature: str, nonce: str
+        self, client: httpx.AsyncClient, message: str, signature: str
     ) -> str:
         """Authenticate via a pre-signed SIWE message.
 
-        Returns the JWT token and stores it for subsequent requests.
+        The nonce is embedded inside the SIWE message itself, not sent as a
+        separate field.  Returns the JWT token and stores it for subsequent
+        requests.
         """
-        body = {"siwe_message": message, "siwe_signature": signature, "nonce": nonce}
+        body = {"siwe_message": message, "siwe_signature": signature}
         resp = await client.post(f"{self._base_url}/token", json=body)
         if resp.status_code != 200:
             raise AuthenticationError(f"SIWE auth failed: {resp.status_code} {resp.text}")
 
         data = TokenResponse.model_validate(resp.json())
         self._token = data.access_token
+        self._refresh_token = data.refresh_token
         self._expires_at = self._read_exp(self._token)
         logger.debug("SIWE authentication successful, expires_at=%.0f", self._expires_at)
         return self._token

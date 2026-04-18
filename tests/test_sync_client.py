@@ -75,17 +75,17 @@ class TestSyncDelegation:
         assert result["sub"] == "user-1"
 
     def test_authenticate_siwe_delegates(self):
-        async def _fake_siwe(msg, sig, nonce):
+        async def _fake_siwe(msg, sig):
             return "jwt.token.here"
 
         with TeardropClient("http://test", token="tok.en.sig") as client:
             with patch.object(client._async, "authenticate_siwe", side_effect=_fake_siwe):
-                result = client.authenticate_siwe("msg", "0xSIG", "nonce-abc")
+                result = client.authenticate_siwe("msg", "0xSIG")
 
         assert result == "jwt.token.here"
 
     def test_get_invoices_delegates(self):
-        response = {"items": [], "next_cursor": None}
+        response = []
 
         with TeardropClient("http://test", token="tok.en.sig") as client:
             with patch.object(client._async, "get_invoices", new=AsyncMock(return_value=response)):
@@ -94,7 +94,7 @@ class TestSyncDelegation:
         assert result == response
 
     def test_get_credit_history_delegates(self):
-        response = {"items": [], "next_cursor": None}
+        response = []
 
         with TeardropClient("http://test", token="tok.en.sig") as client:
             with patch.object(
@@ -105,22 +105,20 @@ class TestSyncDelegation:
         assert result == response
 
     def test_topup_stripe_delegates(self):
-        from teardrop.models import StripeTopupRequest
+        from teardrop.models import StripeTopupRequest, StripeTopupResponse
 
-        async def _fake(request):
-            return {"session_id": "sess_x", "checkout_url": "https://stripe.com/pay/x"}
+        resp = StripeTopupResponse(client_secret="cs_x", session_id="sess_x")
 
         with TeardropClient("http://test", token="tok.en.sig") as client:
-            with patch.object(client._async, "topup_stripe", side_effect=_fake):
+            with patch.object(client._async, "topup_stripe", new=AsyncMock(return_value=resp)):
                 result = client.topup_stripe(
                     StripeTopupRequest(
-                        amount_usdc=1_000_000,
-                        success_url="https://app.example.com/success",
-                        cancel_url="https://app.example.com/cancel",
+                        amount_cents=5000,
+                        return_url="https://app.example.com/return",
                     )
                 )
 
-        assert "checkout_url" in result
+        assert result.session_id == "sess_x"
 
 
 class TestSyncFromAgentCard:

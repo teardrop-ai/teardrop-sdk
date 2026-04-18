@@ -22,8 +22,10 @@ from teardrop.exceptions import (
     ValidationError,
 )
 from teardrop.models import (
+    AddTrustedAgentRequest,
     AgentCard,
     AgentRunRequest,
+    AgentWallet,
     AuthorConfig,
     BillingBalance,
     BillingHistoryEntry,
@@ -37,9 +39,9 @@ from teardrop.models import (
     JwtPayloadBase,
     LinkWalletRequest,
     MODELS_BY_PROVIDER,
+    MarketplaceSubscription,
     MarketplaceTool,
     MemoryEntry,
-    MemoryListResponse,
     ModelBenchmarksResponse,
     OrgLlmConfig,
     OrgMcpServer,
@@ -50,6 +52,8 @@ from teardrop.models import (
     StripeTopupRequest,
     StripeTopupResponse,
     StripeTopupStatusResponse,
+    TokenResponse,
+    TrustedAgent,
     UpdateMcpServerRequest,
     UpdateOrgToolRequest,
     UsdcTopupRequest,
@@ -169,34 +173,33 @@ class AsyncTeardropClient:
 
     async def run(
         self,
-        prompt: str,
+        message: str,
         *,
         thread_id: str | None = None,
-        model: str | None = None,
-        x402_payment_header: str | None = None,
-        payment_signature: str | None = None,
+        context: dict[str, Any] | None = None,
+        payment_header: str | None = None,
     ) -> AsyncIterator[SSEEvent]:
         """Stream an agent run, yielding parsed SSE events.
 
         Args:
-            prompt: User prompt (max 4096 chars).
+            message: User message (max 4096 chars).
             thread_id: Optional conversation thread ID (auto-generated if omitted).
-            model: Optional LLM model override (e.g. ``"claude-opus-4-5"``).
-            x402_payment_header: x402 payment header value from a prior 402 response.
-            payment_signature: EIP-3009 signature for x402 payment.
+            context: Optional extra context passed to agent state metadata.
+            payment_header: Pre-signed x402 payment header (for retry after 402).
         """
         http = await self._get_http()
         headers = await self._headers()
         headers["Accept"] = "text/event-stream"
 
+        if payment_header:
+            headers["X-Payment"] = payment_header
+
         req = AgentRunRequest(
-            prompt=prompt,
+            message=message,
             thread_id=thread_id or str(uuid.uuid4()),
-            model=model,
-            x402_payment_header=x402_payment_header,
-            payment_signature=payment_signature,
+            context=context,
         )
-        body = req.model_dump(by_alias=True, exclude_none=True)
+        body = req.model_dump(exclude_none=True)
 
         async with http.stream(
             "POST",
@@ -214,23 +217,20 @@ class AsyncTeardropClient:
     # ─── Auth ─────────────────────────────────────────────────────────────
 
     async def get_siwe_nonce(self) -> dict[str, str]:
-        """GET /auth/siwe/nonce — fetch a single-use nonce for SIWE sign-in.
-
-        The returned nonce must be embedded in the EIP-4361 message before
-        signing.  Fetch one nonce per login or wallet-link attempt.
-        """
+        """GET /auth/siwe/nonce — fetch a single-use nonce for SIWE sign-in."""
         http = await self._get_http()
         resp = await http.get(f"{self._base_url}/auth/siwe/nonce")
         self._raise_for_status(resp)
         return resp.json()
 
-    async def authenticate_siwe(self, message: str, signature: str, nonce: str) -> str:
+    async def authenticate_siwe(self, message: str, signature: str) -> str:
         """POST /token (SIWE mode) — authenticate with a pre-signed SIWE message.
 
-        Returns the JWT and stores it for subsequent requests.
+        The nonce is embedded inside the SIWE message itself, not sent as a
+        separate field.  Returns the JWT and stores it for subsequent requests.
         """
         http = await self._get_http()
-        return await self._token_manager.authenticate_siwe(http, message, signature, nonce)
+        return await self._token_manager.authenticate_siwe(http, message, signature)
 
     async def get_me(self) -> JwtPayloadBase:
         """GET /auth/me — return authenticated identity claims."""
@@ -238,6 +238,98 @@ class AsyncTeardropClient:
         resp = await http.get(f"{self._base_url}/auth/me", headers=await self._headers())
         self._raise_for_status(resp)
         return JwtPayloadBase.model_validate(resp.json())
+
+    async def register(
+        self, *, org_name: str, email: str, password: str
+    ) -> TokenResponse:
+        """POST /register — self-serve org + user registration."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/register",
+            json={"org_name": org_name, "email": email, "password": password},
+        )
+        self._raise_for_status(resp)
+        data = TokenResponse.model_validate(resp.json())
+        self._token_manager._token = data.access_token
+        self._token_manager._refresh_token = data.refresh_token
+        self._token_manager._expires_at = self._token_manager._read_exp(data.access_token)
+        return data
+
+    async def register_invite(
+        self, *, token: str, email: str, password: str
+    ) -> TokenResponse:
+        """POST /register/invite — accept org invite and create user."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/register/invite",
+            json={"token": token, "email": email, "password": password},
+        )
+        self._raise_for_status(resp)
+        data = TokenResponse.model_validate(resp.json())
+        self._token_manager._token = data.access_token
+        self._token_manager._refresh_token = data.refresh_token
+        self._token_manager._expires_at = self._token_manager._read_exp(data.access_token)
+        return data
+
+    async def refresh(self, refresh_token: str) -> TokenResponse:
+        """POST /auth/refresh — rotate refresh token for new access token."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+        self._raise_for_status(resp)
+        data = TokenResponse.model_validate(resp.json())
+        self._token_manager._token = data.access_token
+        self._token_manager._refresh_token = data.refresh_token
+        self._token_manager._expires_at = self._token_manager._read_exp(data.access_token)
+        return data
+
+    async def logout(self, refresh_token: str) -> None:
+        """POST /auth/logout — revoke a refresh token."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/auth/logout",
+            json={"refresh_token": refresh_token},
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+
+    async def verify_email(self, token: str) -> dict[str, Any]:
+        """GET /auth/verify-email — verify email with one-time token."""
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/auth/verify-email",
+            params={"token": token},
+        )
+        self._raise_for_status(resp)
+        return resp.json()
+
+    async def resend_verification(self, email: str) -> dict[str, Any]:
+        """POST /auth/resend-verification — resend verification email."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/auth/resend-verification",
+            json={"email": email},
+        )
+        self._raise_for_status(resp)
+        return resp.json()
+
+    async def invite(
+        self, *, email: str | None = None, role: str = "member"
+    ) -> dict[str, Any]:
+        """POST /org/invite — create an org invite link."""
+        http = await self._get_http()
+        body: dict[str, Any] = {"role": role}
+        if email:
+            body["email"] = email
+        resp = await http.post(
+            f"{self._base_url}/org/invite",
+            json=body,
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return resp.json()
 
     # ─── Billing ──────────────────────────────────────────────────────────
 
@@ -255,41 +347,29 @@ class AsyncTeardropClient:
         self._raise_for_status(resp)
         return BillingPricingResponse.model_validate(resp.json())
 
-    async def get_billing_history(
-        self, *, limit: int = 20, cursor: str | None = None
-    ) -> dict[str, Any]:
-        """GET /billing/history — cursor-paginated run billing history."""
+    async def get_billing_history(self, *, limit: int = 20) -> list[BillingHistoryEntry]:
+        """GET /billing/history — run billing history (flat array)."""
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
-        if cursor:
-            params["cursor"] = cursor
         resp = await http.get(
             f"{self._base_url}/billing/history",
             headers=await self._headers(),
             params=params,
         )
         self._raise_for_status(resp)
-        data = resp.json()
-        data["items"] = [BillingHistoryEntry.model_validate(i) for i in data.get("items", [])]
-        return data
+        return [BillingHistoryEntry.model_validate(i) for i in resp.json()]
 
-    async def get_invoices(
-        self, *, limit: int = 20, cursor: str | None = None
-    ) -> dict[str, Any]:
-        """GET /billing/invoices — cursor-paginated invoice list."""
+    async def get_invoices(self, *, limit: int = 20) -> list[Invoice]:
+        """GET /billing/invoices — invoice list."""
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
-        if cursor:
-            params["cursor"] = cursor
         resp = await http.get(
             f"{self._base_url}/billing/invoices",
             headers=await self._headers(),
             params=params,
         )
         self._raise_for_status(resp)
-        data = resp.json()
-        data["items"] = [Invoice.model_validate(i) for i in data.get("items", [])]
-        return data
+        return [Invoice.model_validate(i) for i in resp.json()]
 
     async def get_invoice(self, run_id: str) -> Invoice:
         """GET /billing/invoice/{run_id} — single run invoice."""
@@ -302,22 +382,20 @@ class AsyncTeardropClient:
         return Invoice.model_validate(resp.json())
 
     async def get_credit_history(
-        self, *, limit: int = 20, cursor: str | None = None
-    ) -> dict[str, Any]:
-        """GET /billing/credit-history — cursor-paginated credit topup history."""
+        self, *, limit: int = 20, operation: str | None = None
+    ) -> list[CreditHistoryEntry]:
+        """GET /billing/credit-history — credit topup history."""
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
-        if cursor:
-            params["cursor"] = cursor
+        if operation:
+            params["operation"] = operation
         resp = await http.get(
             f"{self._base_url}/billing/credit-history",
             headers=await self._headers(),
             params=params,
         )
         self._raise_for_status(resp)
-        data = resp.json()
-        data["items"] = [CreditHistoryEntry.model_validate(i) for i in data.get("items", [])]
-        return data
+        return [CreditHistoryEntry.model_validate(i) for i in resp.json()]
 
     async def topup_stripe(self, request: StripeTopupRequest) -> StripeTopupResponse:
         """POST /billing/topup/stripe — start a Stripe checkout session."""
@@ -341,12 +419,13 @@ class AsyncTeardropClient:
         self._raise_for_status(resp)
         return StripeTopupStatusResponse.model_validate(resp.json())
 
-    async def get_usdc_topup_requirements(self) -> UsdcTopupRequirements:
-        """GET /billing/topup/usdc/requirements — USDC topup contract parameters."""
+    async def get_usdc_topup_requirements(self, amount_usdc: int) -> UsdcTopupRequirements:
+        """GET /billing/topup/usdc/requirements — USDC topup parameters."""
         http = await self._get_http()
         resp = await http.get(
             f"{self._base_url}/billing/topup/usdc/requirements",
             headers=await self._headers(),
+            params={"amount_usdc": amount_usdc},
         )
         self._raise_for_status(resp)
         return UsdcTopupRequirements.model_validate(resp.json())
@@ -370,21 +449,21 @@ class AsyncTeardropClient:
     async def get_usage(
         self,
         *,
-        from_date: str | None = None,
-        to_date: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
     ) -> UsageSummary:
         """GET /usage/me — aggregated usage statistics for the current user.
 
         Args:
-            from_date: ISO 8601 start of period (inclusive).
-            to_date: ISO 8601 end of period (inclusive).
+            start: ISO 8601 start of period (inclusive).
+            end: ISO 8601 end of period (inclusive).
         """
         http = await self._get_http()
         params: dict[str, Any] = {}
-        if from_date:
-            params["from"] = from_date
-        if to_date:
-            params["to"] = to_date
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
         resp = await http.get(
             f"{self._base_url}/usage/me",
             headers=await self._headers(),
@@ -605,21 +684,17 @@ class AsyncTeardropClient:
 
     # ─── Memory ───────────────────────────────────────────────────────────────
 
-    async def list_memories(
-        self, *, cursor: str | None = None, limit: int = 20
-    ) -> MemoryListResponse:
-        """GET /memories — cursor-paginated list of org memory entries."""
+    async def list_memories(self, *, limit: int = 50) -> list[MemoryEntry]:
+        """GET /memories — list org memory entries."""
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
-        if cursor:
-            params["cursor"] = cursor
         resp = await http.get(
             f"{self._base_url}/memories",
             headers=await self._headers(),
             params=params,
         )
         self._raise_for_status(resp)
-        return MemoryListResponse.model_validate(resp.json())
+        return [MemoryEntry.model_validate(m) for m in resp.json()]
 
     async def create_memory(self, request: StoreMemoryRequest) -> MemoryEntry:
         """POST /memories — store a memory entry."""
@@ -645,29 +720,25 @@ class AsyncTeardropClient:
     async def get_marketplace_catalog(
         self,
         *,
-        cursor: str | None = None,
-        limit: int = 20,
-        tags: list[str] | None = None,
+        limit: int | None = None,
     ) -> dict[str, Any]:
         """GET /marketplace/catalog — browse published marketplace tools (no auth required)."""
         http = await self._get_http()
-        params: dict[str, Any] = {"limit": limit}
-        if cursor:
-            params["cursor"] = cursor
-        if tags:
-            params["tags"] = ",".join(tags)
+        params: dict[str, Any] = {}
+        if limit is not None:
+            params["limit"] = limit
         resp = await http.get(f"{self._base_url}/marketplace/catalog", params=params)
         self._raise_for_status(resp)
         data = resp.json()
-        data["items"] = [MarketplaceTool.model_validate(t) for t in data.get("items", [])]
+        data["tools"] = [MarketplaceTool.model_validate(t) for t in data.get("tools", [])]
         return data
 
-    async def set_author_config(self, payout_address: str) -> AuthorConfig:
+    async def set_author_config(self, settlement_wallet: str) -> AuthorConfig:
         """POST /marketplace/author-config — create or update author payout config."""
         http = await self._get_http()
         resp = await http.post(
             f"{self._base_url}/marketplace/author-config",
-            json={"payout_address": payout_address},
+            json={"settlement_wallet": settlement_wallet},
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -691,23 +762,17 @@ class AsyncTeardropClient:
         self._raise_for_status(resp)
         return resp.json()
 
-    async def get_earnings(
-        self, *, cursor: str | None = None, limit: int = 20
-    ) -> dict[str, Any]:
-        """GET /marketplace/earnings — cursor-paginated earnings history."""
+    async def get_earnings(self, *, limit: int = 20) -> list[EarningsEntry]:
+        """GET /marketplace/earnings — earnings history."""
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
-        if cursor:
-            params["cursor"] = cursor
         resp = await http.get(
             f"{self._base_url}/marketplace/earnings",
             headers=await self._headers(),
             params=params,
         )
         self._raise_for_status(resp)
-        data = resp.json()
-        data["items"] = [EarningsEntry.model_validate(e) for e in data.get("items", [])]
-        return data
+        return [EarningsEntry.model_validate(e) for e in resp.json()]
 
     async def withdraw(self, request: WithdrawRequest) -> dict[str, Any]:
         """POST /marketplace/withdraw — request a marketplace earnings payout."""
@@ -719,6 +784,48 @@ class AsyncTeardropClient:
         )
         self._raise_for_status(resp)
         return resp.json()
+
+    async def get_withdrawals(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        """GET /marketplace/withdrawals — withdrawal history."""
+        http = await self._get_http()
+        params: dict[str, Any] = {"limit": limit}
+        resp = await http.get(
+            f"{self._base_url}/marketplace/withdrawals",
+            headers=await self._headers(),
+            params=params,
+        )
+        self._raise_for_status(resp)
+        return resp.json()
+
+    async def subscribe(self, qualified_tool_name: str) -> MarketplaceSubscription:
+        """POST /marketplace/subscriptions — subscribe to a marketplace tool."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/marketplace/subscriptions",
+            json={"qualified_tool_name": qualified_tool_name},
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return MarketplaceSubscription.model_validate(resp.json())
+
+    async def get_subscriptions(self) -> list[MarketplaceSubscription]:
+        """GET /marketplace/subscriptions — list active subscriptions."""
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/marketplace/subscriptions",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return [MarketplaceSubscription.model_validate(s) for s in resp.json()]
+
+    async def unsubscribe(self, subscription_id: str) -> None:
+        """DELETE /marketplace/subscriptions/{id} — unsubscribe."""
+        http = await self._get_http()
+        resp = await http.delete(
+            f"{self._base_url}/marketplace/subscriptions/{subscription_id}",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
 
     # ─── LLM Config ───────────────────────────────────────────────────────────
 
@@ -865,7 +972,7 @@ class AsyncTeardropClient:
         """Return known model identifiers for *provider* (client-side constant).
 
         Args:
-            provider: One of ``"anthropic"``, ``"openai"``, or ``"google"``.
+            provider: One of ``"anthropic"``, ``"openai"``, ``"google"``, ``"openrouter"``.
 
         Raises:
             :exc:`ValueError`: Unknown provider.
@@ -876,6 +983,87 @@ class AsyncTeardropClient:
                 f"Supported: {list(MODELS_BY_PROVIDER.keys())}"
             )
         return list(MODELS_BY_PROVIDER[provider])
+
+    # ─── A2A Delegation ───────────────────────────────────────────────────────
+
+    async def add_trusted_agent(self, request: AddTrustedAgentRequest) -> TrustedAgent:
+        """POST /a2a/agents — add a trusted agent for delegation."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/a2a/agents",
+            json=request.model_dump(exclude_none=True),
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return TrustedAgent.model_validate(resp.json())
+
+    async def list_trusted_agents(self) -> list[TrustedAgent]:
+        """GET /a2a/agents — list org's trusted agents."""
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/a2a/agents",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return [TrustedAgent.model_validate(a) for a in resp.json()]
+
+    async def remove_trusted_agent(self, agent_id: str) -> None:
+        """DELETE /a2a/agents/{agent_id} — remove a trusted agent."""
+        http = await self._get_http()
+        resp = await http.delete(
+            f"{self._base_url}/a2a/agents/{agent_id}",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+
+    async def get_delegations(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        """GET /a2a/delegations — delegation event history."""
+        http = await self._get_http()
+        params: dict[str, Any] = {"limit": limit}
+        resp = await http.get(
+            f"{self._base_url}/a2a/delegations",
+            headers=await self._headers(),
+            params=params,
+        )
+        self._raise_for_status(resp)
+        return resp.json()
+
+    # ─── Agent Wallets ─────────────────────────────────────────────────────────
+
+    async def provision_agent_wallet(self) -> AgentWallet:
+        """POST /wallets/agent — provision a CDP agent wallet for the org."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/wallets/agent",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return AgentWallet.model_validate(resp.json())
+
+    async def get_agent_wallet(
+        self, *, include_balance: bool = False
+    ) -> AgentWallet:
+        """GET /wallets/agent — get org agent wallet."""
+        http = await self._get_http()
+        params: dict[str, Any] = {}
+        if include_balance:
+            params["include_balance"] = "true"
+        resp = await http.get(
+            f"{self._base_url}/wallets/agent",
+            headers=await self._headers(),
+            params=params,
+        )
+        self._raise_for_status(resp)
+        return AgentWallet.model_validate(resp.json())
+
+    async def deactivate_agent_wallet(self) -> None:
+        """DELETE /wallets/agent — deactivate agent wallet (admin only)."""
+        http = await self._get_http()
+        resp = await http.delete(
+            f"{self._base_url}/wallets/agent",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
 
     # ─── Factory ──────────────────────────────────────────────────────────
 
@@ -946,12 +1134,12 @@ class TeardropClient:
         self._ensure_portal()
         return self._portal.call(lambda: coro)  # type: ignore[union-attr]
 
-    def run_sync(self, prompt: str, **kwargs: Any) -> list[SSEEvent]:
+    def run_sync(self, message: str, **kwargs: Any) -> list[SSEEvent]:
         """Run agent and collect all events (blocking)."""
 
         async def _collect() -> list[SSEEvent]:
             events = []
-            async for event in self._async.run(prompt, **kwargs):
+            async for event in self._async.run(message, **kwargs):
                 events.append(event)
             return events
 
@@ -961,11 +1149,32 @@ class TeardropClient:
     def get_siwe_nonce(self) -> dict[str, str]:
         return self._run(self._async.get_siwe_nonce())
 
-    def authenticate_siwe(self, message: str, signature: str, nonce: str) -> str:
-        return self._run(self._async.authenticate_siwe(message, signature, nonce))
+    def authenticate_siwe(self, message: str, signature: str) -> str:
+        return self._run(self._async.authenticate_siwe(message, signature))
 
     def get_me(self) -> JwtPayloadBase:
         return self._run(self._async.get_me())
+
+    def register(self, **kwargs: Any) -> TokenResponse:
+        return self._run(self._async.register(**kwargs))
+
+    def register_invite(self, **kwargs: Any) -> TokenResponse:
+        return self._run(self._async.register_invite(**kwargs))
+
+    def refresh(self, refresh_token: str) -> TokenResponse:
+        return self._run(self._async.refresh(refresh_token))
+
+    def logout(self, refresh_token: str) -> None:
+        return self._run(self._async.logout(refresh_token))
+
+    def verify_email(self, token: str) -> dict[str, Any]:
+        return self._run(self._async.verify_email(token))
+
+    def resend_verification(self, email: str) -> dict[str, Any]:
+        return self._run(self._async.resend_verification(email))
+
+    def invite(self, **kwargs: Any) -> dict[str, Any]:
+        return self._run(self._async.invite(**kwargs))
 
     def get_balance(self) -> BillingBalance:
         return self._run(self._async.get_balance())
@@ -973,17 +1182,19 @@ class TeardropClient:
     def get_pricing(self) -> BillingPricingResponse:
         return self._run(self._async.get_pricing())
 
-    def get_billing_history(self, *, limit: int = 20, cursor: str | None = None) -> dict[str, Any]:
-        return self._run(self._async.get_billing_history(limit=limit, cursor=cursor))
+    def get_billing_history(self, *, limit: int = 20) -> list[BillingHistoryEntry]:
+        return self._run(self._async.get_billing_history(limit=limit))
 
-    def get_invoices(self, *, limit: int = 20, cursor: str | None = None) -> dict[str, Any]:
-        return self._run(self._async.get_invoices(limit=limit, cursor=cursor))
+    def get_invoices(self, *, limit: int = 20) -> list[Invoice]:
+        return self._run(self._async.get_invoices(limit=limit))
 
     def get_invoice(self, run_id: str) -> Invoice:
         return self._run(self._async.get_invoice(run_id))
 
-    def get_credit_history(self, *, limit: int = 20, cursor: str | None = None) -> dict[str, Any]:
-        return self._run(self._async.get_credit_history(limit=limit, cursor=cursor))
+    def get_credit_history(
+        self, *, limit: int = 20, operation: str | None = None
+    ) -> list[CreditHistoryEntry]:
+        return self._run(self._async.get_credit_history(limit=limit, operation=operation))
 
     def topup_stripe(self, request: StripeTopupRequest) -> StripeTopupResponse:
         return self._run(self._async.topup_stripe(request))
@@ -991,8 +1202,8 @@ class TeardropClient:
     def get_stripe_topup_status(self, session_id: str) -> StripeTopupStatusResponse:
         return self._run(self._async.get_stripe_topup_status(session_id))
 
-    def get_usdc_topup_requirements(self) -> UsdcTopupRequirements:
-        return self._run(self._async.get_usdc_topup_requirements())
+    def get_usdc_topup_requirements(self, amount_usdc: int) -> UsdcTopupRequirements:
+        return self._run(self._async.get_usdc_topup_requirements(amount_usdc))
 
     def topup_usdc(self, request: UsdcTopupRequest) -> dict[str, Any]:
         return self._run(self._async.topup_usdc(request))
@@ -1045,8 +1256,8 @@ class TeardropClient:
     def discover_mcp_server_tools(self, server_id: str) -> DiscoverMcpToolsResponse:
         return self._run(self._async.discover_mcp_server_tools(server_id))
 
-    def list_memories(self, *, cursor: str | None = None, limit: int = 20) -> MemoryListResponse:
-        return self._run(self._async.list_memories(cursor=cursor, limit=limit))
+    def list_memories(self, *, limit: int = 50) -> list[MemoryEntry]:
+        return self._run(self._async.list_memories(limit=limit))
 
     def create_memory(self, request: StoreMemoryRequest) -> MemoryEntry:
         return self._run(self._async.create_memory(request))
@@ -1057,8 +1268,8 @@ class TeardropClient:
     def get_marketplace_catalog(self, **kwargs: Any) -> dict[str, Any]:
         return self._run(self._async.get_marketplace_catalog(**kwargs))
 
-    def set_author_config(self, payout_address: str) -> AuthorConfig:
-        return self._run(self._async.set_author_config(payout_address))
+    def set_author_config(self, settlement_wallet: str) -> AuthorConfig:
+        return self._run(self._async.set_author_config(settlement_wallet))
 
     def get_author_config(self) -> AuthorConfig:
         return self._run(self._async.get_author_config())
@@ -1066,11 +1277,23 @@ class TeardropClient:
     def get_marketplace_balance(self) -> dict[str, Any]:
         return self._run(self._async.get_marketplace_balance())
 
-    def get_earnings(self, **kwargs: Any) -> dict[str, Any]:
+    def get_earnings(self, **kwargs: Any) -> list[EarningsEntry]:
         return self._run(self._async.get_earnings(**kwargs))
 
     def withdraw(self, request: WithdrawRequest) -> dict[str, Any]:
         return self._run(self._async.withdraw(request))
+
+    def get_withdrawals(self, **kwargs: Any) -> list[dict[str, Any]]:
+        return self._run(self._async.get_withdrawals(**kwargs))
+
+    def subscribe(self, qualified_tool_name: str) -> MarketplaceSubscription:
+        return self._run(self._async.subscribe(qualified_tool_name))
+
+    def get_subscriptions(self) -> list[MarketplaceSubscription]:
+        return self._run(self._async.get_subscriptions())
+
+    def unsubscribe(self, subscription_id: str) -> None:
+        return self._run(self._async.unsubscribe(subscription_id))
 
     # ─── LLM Config ───────────────────────────────────────────────────────────
 
@@ -1096,6 +1319,31 @@ class TeardropClient:
 
     def list_models_for_provider(self, provider: str) -> list[str]:
         return self._async.list_models_for_provider(provider)
+
+    # ─── A2A Delegation ───────────────────────────────────────────────────────
+
+    def add_trusted_agent(self, request: AddTrustedAgentRequest) -> TrustedAgent:
+        return self._run(self._async.add_trusted_agent(request))
+
+    def list_trusted_agents(self) -> list[TrustedAgent]:
+        return self._run(self._async.list_trusted_agents())
+
+    def remove_trusted_agent(self, agent_id: str) -> None:
+        return self._run(self._async.remove_trusted_agent(agent_id))
+
+    def get_delegations(self, **kwargs: Any) -> list[dict[str, Any]]:
+        return self._run(self._async.get_delegations(**kwargs))
+
+    # ─── Agent Wallets ─────────────────────────────────────────────────────────
+
+    def provision_agent_wallet(self) -> AgentWallet:
+        return self._run(self._async.provision_agent_wallet())
+
+    def get_agent_wallet(self, **kwargs: Any) -> AgentWallet:
+        return self._run(self._async.get_agent_wallet(**kwargs))
+
+    def deactivate_agent_wallet(self) -> None:
+        return self._run(self._async.deactivate_agent_wallet())
 
     def close(self) -> None:
         if self._portal is not None:

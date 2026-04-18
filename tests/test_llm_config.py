@@ -473,7 +473,7 @@ class TestProviderHelpers:
     def test_list_supported_providers(self):
         client = AsyncTeardropClient("http://test", token="tok.en.sig")
         providers = client.list_supported_providers()
-        assert set(providers) == {"anthropic", "openai", "google"}
+        assert set(providers) == {"anthropic", "openai", "google", "openrouter"}
 
     def test_list_models_for_provider_anthropic(self):
         client = AsyncTeardropClient("http://test", token="tok.en.sig")

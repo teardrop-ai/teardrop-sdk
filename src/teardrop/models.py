@@ -13,6 +13,7 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+    refresh_token: str | None = None
 
 
 class JwtPayloadBase(BaseModel):
@@ -24,6 +25,7 @@ class JwtPayloadBase(BaseModel):
     role: str = ""
     auth_method: str = ""
     email: str | None = None
+    iss: str | None = None
     exp: int | None = None
     iat: int | None = None
     # SIWE-specific fields (present when auth_method == "siwe")
@@ -42,11 +44,9 @@ class JwtPayloadBase(BaseModel):
 
 
 class AgentRunRequest(BaseModel):
-    prompt: str = Field(..., max_length=4096, serialization_alias="message")
+    message: str = Field(..., max_length=4096)
     thread_id: str = ""
-    model: str | None = None
-    x402_payment_header: str | None = None
-    payment_signature: str | None = None
+    context: dict[str, Any] | None = None
 
 
 class SSEEvent(BaseModel):
@@ -77,16 +77,16 @@ class BillingPricingResponse(BaseModel):
 PricingInfo = BillingPricingResponse
 
 
-class BillingBalance(BaseModel):
+class CreditBalance(BaseModel):
     org_id: str
     balance_usdc: int
-    reserved_usdc: int = 0
-    available_usdc: int = 0
-    updated_at: str = ""
+    spending_limit_usdc: int = 0
+    is_paused: bool = False
+    daily_spend_usdc: int = 0
 
 
-# Spec alias
-CreditBalance = BillingBalance
+# Backward-compat alias
+BillingBalance = CreditBalance
 
 
 class BillingHistoryEntry(BaseModel):
@@ -117,69 +117,57 @@ class CreditHistoryEntry(BaseModel):
 
 
 class StripeTopupRequest(BaseModel):
-    amount_usdc: int
-    success_url: str
-    cancel_url: str
+    amount_cents: int
+    return_url: str
 
 
 class StripeTopupResponse(BaseModel):
+    client_secret: str
     session_id: str
-    checkout_url: str
 
 
 class StripeTopupStatusResponse(BaseModel):
-    session_id: str
     status: Literal["open", "complete", "expired"]
-    amount_usdc: int | None = None
+    new_balance_fmt: str | None = None
 
 
 class UsdcTopupRequirements(BaseModel):
-    payto_address: str
-    token_address: str
-    network: str
-    chain_id: int
-    min_amount_usdc: int
-    authorization_type: str = "EIP-3009"
+    accepts: list[dict[str, Any]] = Field(default_factory=list)
+    x402Version: int = 2
 
 
 class UsdcTopupRequest(BaseModel):
     amount_usdc: int
-    authorization: str
-    signature: str
-    tx_hash: str | None = None
+    payment_header: str
 
 
 # ─── Usage ────────────────────────────────────────────────────────────────────
 
 
 class UsageSummary(BaseModel):
-    user_id: str = ""
-    org_id: str = ""
-    period_from: str = ""
-    period_to: str = ""
     total_runs: int = 0
     total_tokens_in: int = 0
     total_tokens_out: int = 0
     total_tool_calls: int = 0
-    total_cost_usdc: int = 0
+    total_duration_ms: int = 0
 
 
 # ─── Wallets ──────────────────────────────────────────────────────────────────
 
 
 class LinkWalletRequest(BaseModel):
-    message: str
-    signature: str
-    nonce: str
+    siwe_message: str
+    siwe_signature: str
 
 
 class Wallet(BaseModel):
     id: str
+    org_id: str = ""
     user_id: str | None = None
     address: str
     chain_id: int
     is_primary: bool = False
-    linked_at: str = ""
+    created_at: str = ""
 
     model_config = {"extra": "allow"}
 
@@ -209,7 +197,13 @@ class CreateOrgToolRequest(BaseModel):
     description: str = Field(..., min_length=1, max_length=500)
     input_schema: dict[str, Any] = Field(...)
     webhook_url: str = Field(..., max_length=2048)
-    webhook_secret: str | None = None
+    webhook_method: str | None = None
+    auth_header_name: str | None = None
+    auth_header_value: str | None = None
+    timeout_seconds: int | None = None
+    publish_as_mcp: bool | None = None
+    marketplace_description: str | None = None
+    base_price_usdc: int | None = None
 
 
 # Backward-compat alias
@@ -220,8 +214,14 @@ class UpdateOrgToolRequest(BaseModel):
     description: str | None = None
     input_schema: dict[str, Any] | None = None
     webhook_url: str | None = None
-    webhook_secret: str | None = None
+    webhook_method: str | None = None
+    auth_header_name: str | None = None
+    auth_header_value: str | None = None
+    timeout_seconds: int | None = None
     is_active: bool | None = None
+    publish_as_mcp: bool | None = None
+    marketplace_description: str | None = None
+    base_price_usdc: int | None = None
 
 
 class OrgTool(BaseModel):
@@ -231,8 +231,12 @@ class OrgTool(BaseModel):
     description: str
     input_schema: dict[str, Any]
     webhook_url: str
-    has_auth: bool
-    is_active: bool
+    webhook_method: str = "POST"
+    has_auth: bool = False
+    is_active: bool = True
+    publish_as_mcp: bool = False
+    marketplace_description: str | None = None
+    base_price_usdc: int | None = None
     created_at: str = ""
     updated_at: str = ""
 
@@ -330,45 +334,32 @@ class DiscoverMcpToolsResponse(BaseModel):
 
 
 class StoreMemoryRequest(BaseModel):
-    content: str
-    metadata: dict[str, Any] | None = None
-    ttl_seconds: int | None = None
+    content: str = Field(..., min_length=1, max_length=500)
 
 
 class MemoryEntry(BaseModel):
     id: str
-    org_id: str
     content: str
-    metadata: dict[str, Any] | None = None
     created_at: str = ""
-    expires_at: str | None = None
-
-
-class MemoryListResponse(BaseModel):
-    items: list[MemoryEntry]
-    total: int = 0
-    next_cursor: str | None = None
 
 
 # ─── Marketplace ──────────────────────────────────────────────────────────────
 
 
 class MarketplaceTool(BaseModel):
-    id: str
     name: str
+    qualified_name: str
     description: str
-    author_org_id: str
-    price_usdc: int
-    tags: list[str] = Field(default_factory=list)
-    mcp_server_url: str
-    is_active: bool = True
-    created_at: str = ""
+    marketplace_description: str | None = None
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    cost_usdc: int = 0
+    author_org_name: str = ""
+    author_org_slug: str = ""
 
 
 class AuthorConfig(BaseModel):
     org_id: str
-    payout_address: str
-    is_verified: bool = False
+    settlement_wallet: str
     created_at: str = ""
     updated_at: str = ""
 
@@ -377,24 +368,35 @@ class EarningsEntry(BaseModel):
     id: str
     tool_name: str
     amount_usdc: int
-    buyer_org_id: str
+    caller_org_id: str = ""
+    author_share_usdc: int = 0
+    platform_share_usdc: int = 0
+    status: str = ""
     created_at: str = ""
 
 
 class WithdrawRequest(BaseModel):
     amount_usdc: int
-    payout_address: str | None = None
+
+
+class MarketplaceSubscription(BaseModel):
+    id: str
+    org_id: str
+    qualified_tool_name: str
+    is_active: bool = True
+    subscribed_at: str = ""
 
 
 # ─── LLM Config ───────────────────────────────────────────────────────────────
 
-ProviderType = Literal["anthropic", "openai", "google"]
+ProviderType = Literal["anthropic", "openai", "google", "openrouter"]
 RoutingPreference = Literal["default", "cost", "speed", "quality"]
 
 MODELS_BY_PROVIDER: dict[str, list[str]] = {
     "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-4-20250514"],
     "openai": ["gpt-4o-mini", "gpt-4o"],
     "google": ["gemini-2.0-flash", "gemini-2.5-pro"],
+    "openrouter": [],
 }
 
 
@@ -468,3 +470,44 @@ class ModelBenchmarksResponse(BaseModel):
 
     models: list[ModelInfo] = Field(default_factory=list)
     updated_at: str = ""
+
+
+# ─── A2A Delegation ───────────────────────────────────────────────────────────
+
+
+class AddTrustedAgentRequest(BaseModel):
+    agent_url: str
+    label: str | None = None
+    max_cost_usdc: int | None = None
+    require_x402: bool = False
+    jwt_forward: bool = False
+
+
+class TrustedAgent(BaseModel):
+    id: str
+    org_id: str
+    agent_url: str
+    label: str | None = None
+    max_cost_usdc: int | None = None
+    require_x402: bool = False
+    jwt_forward: bool = False
+    is_active: bool = True
+    created_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+# ─── Agent Wallets ─────────────────────────────────────────────────────────────
+
+
+class AgentWallet(BaseModel):
+    """CDP-backed agent wallet provisioned per-org."""
+
+    id: str = ""
+    org_id: str = ""
+    address: str = ""
+    network: str = ""
+    is_active: bool = True
+    created_at: str = ""
+
+    model_config = {"extra": "allow"}

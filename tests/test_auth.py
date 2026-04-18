@@ -141,7 +141,7 @@ class TestAuthenticateSIWE:
             )
         )
         tm = TokenManager("http://x")
-        result = await tm.authenticate_siwe(client, "siwe-msg", "0xSIG", "nonce-abc")
+        result = await tm.authenticate_siwe(client, "siwe-msg", "0xSIG")
         assert result == token
 
     @pytest.mark.asyncio
@@ -149,4 +149,4 @@ class TestAuthenticateSIWE:
         client = _FakeClient(_FakeHTTPResponse(401, {"detail": "invalid sig"}))
         tm = TokenManager("http://x")
         with pytest.raises(AuthenticationError):
-            await tm.authenticate_siwe(client, "bad", "bad", "nonce-xyz")
+            await tm.authenticate_siwe(client, "bad", "bad")

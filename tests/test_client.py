@@ -175,15 +175,11 @@ class TestGetUsage:
     @pytest.mark.asyncio
     async def test_returns_usage_summary(self):
         usage_data = {
-            "user_id": "u-1",
-            "org_id": "o-1",
-            "period_from": "2026-01-01T00:00:00Z",
-            "period_to": "2026-01-31T23:59:59Z",
             "total_runs": 5,
             "total_tokens_in": 100,
             "total_tokens_out": 200,
             "total_tool_calls": 3,
-            "total_cost_usdc": 5000,
+            "total_duration_ms": 12000,
         }
         mock_http = AsyncMock()
         mock_http.is_closed = False
@@ -203,7 +199,7 @@ class TestGetWallets:
     async def test_returns_wallet_list(self):
         wallets_data = [
             {"id": "w-1", "address": "0xABC", "chain_id": 8453,
-             "user_id": "u-1", "is_primary": False, "linked_at": "2026-01-01T00:00:00Z"}
+             "user_id": "u-1", "is_primary": False, "created_at": "2026-01-01T00:00:00Z"}
         ]
         mock_http = AsyncMock()
         mock_http.is_closed = False
@@ -274,7 +270,7 @@ class TestGetInvoices:
             "breakdown": [],
             "settled_at": "2026-01-01T00:00:00Z",
         }
-        response_data = {"items": [invoice_item], "next_cursor": None}
+        response_data = [invoice_item]
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(response_data))
@@ -284,9 +280,9 @@ class TestGetInvoices:
             with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
                 result = await client.get_invoices()
 
-        assert len(result["items"]) == 1
-        assert isinstance(result["items"][0], Invoice)
-        assert result["items"][0].run_id == "run-1"
+        assert len(result) == 1
+        assert isinstance(result[0], Invoice)
+        assert result[0].run_id == "run-1"
 
 
 class TestGetCreditHistory:
@@ -299,7 +295,7 @@ class TestGetCreditHistory:
             "reference": None,
             "created_at": "2026-01-01T00:00:00Z",
         }
-        response_data = {"items": [entry], "next_cursor": None}
+        response_data = [entry]
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(response_data))
@@ -309,15 +305,15 @@ class TestGetCreditHistory:
             with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
                 result = await client.get_credit_history()
 
-        assert isinstance(result["items"][0], CreditHistoryEntry)
-        assert result["items"][0].method == "stripe"
+        assert isinstance(result[0], CreditHistoryEntry)
+        assert result[0].method == "stripe"
 
 
 class TestTopupStripe:
     @pytest.mark.asyncio
     async def test_returns_stripe_response(self):
         from teardrop.models import StripeTopupRequest, StripeTopupResponse
-        topup_data = {"session_id": "sess_abc", "checkout_url": "https://stripe.com/pay/xyz"}
+        topup_data = {"client_secret": "cs_abc", "session_id": "sess_abc"}
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.post = AsyncMock(return_value=_json_response(topup_data))
@@ -327,14 +323,13 @@ class TestTopupStripe:
             with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
                 result = await client.topup_stripe(
                     StripeTopupRequest(
-                        amount_usdc=1_000_000,
-                        success_url="https://app.example.com/success",
-                        cancel_url="https://app.example.com/cancel",
+                        amount_cents=5000,
+                        return_url="https://app.example.com/return",
                     )
                 )
 
         assert isinstance(result, StripeTopupResponse)
-        assert result.checkout_url == "https://stripe.com/pay/xyz"
+        assert result.session_id == "sess_abc"
 
 
 class TestContextManager:
