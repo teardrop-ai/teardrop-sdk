@@ -193,8 +193,28 @@ class TestSetLlmConfig:
                 assert mock_http.get.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_null_api_key_not_sent_in_body(self):
-        """When api_key is None, the field must be absent from the request body."""
+    async def test_api_key_omitted_when_not_provided(self):
+        """When api_key is not passed, the field must be absent from the request body."""
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.put = AsyncMock(return_value=_json_response(_ORG_LLM_CONFIG))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+                await client.set_llm_config(
+                    provider="anthropic",
+                    model="claude-haiku-4-5-20251001",
+                )
+
+        call_kwargs = mock_http.put.call_args
+        body = call_kwargs.kwargs["json"]
+        assert "api_key" not in body
+
+    @pytest.mark.asyncio
+    async def test_null_api_key_sent_to_clear_byok(self):
+        """When api_key=None is explicitly passed, the field must be sent as null
+        so the backend clears BYOK and reverts to the shared platform key."""
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.put = AsyncMock(return_value=_json_response(_ORG_LLM_CONFIG))
@@ -210,7 +230,8 @@ class TestSetLlmConfig:
 
         call_kwargs = mock_http.put.call_args
         body = call_kwargs.kwargs["json"]
-        assert "api_key" not in body
+        assert "api_key" in body
+        assert body["api_key"] is None
 
     @pytest.mark.asyncio
     async def test_api_key_sent_when_provided(self):

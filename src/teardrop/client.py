@@ -66,6 +66,11 @@ from teardrop.streaming import iter_sse_events
 
 # ─── Module constants ─────────────────────────────────────────────────────────
 
+# Sentinel object used to distinguish "not provided" from explicit ``None``.
+# Used in ``set_llm_config`` so callers can pass ``api_key=None`` to *clear*
+# BYOK rather than preserving the existing key.
+_UNSET: object = object()
+
 # Seconds before a cached agent card is considered stale and must be re-fetched.
 _AGENT_CARD_TTL: int = 300
 # Upper bound on the agent-card response body (64 KB).  Blocks memory-bomb payloads.
@@ -855,7 +860,7 @@ class AsyncTeardropClient:
         provider: str,
         model: str,
         routing_preference: str = "default",
-        api_key: str | None = None,
+        api_key: str | None = _UNSET,  # type: ignore[assignment]
         api_base: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.0,
@@ -867,9 +872,12 @@ class AsyncTeardropClient:
             provider: LLM provider — ``"anthropic"``, ``"openai"``, ``"google"``, or ``"openrouter"``.
             model: Model identifier (e.g. ``"claude-haiku-4-5-20251001"``).
             routing_preference: ``"default"``, ``"cost"``, ``"speed"``, or ``"quality"``.
-            api_key: Optional BYOK API key.  If ``None``, the existing stored
-                key is preserved (field is omitted from the request).  Sent
-                over TLS only; never logged.
+            api_key: BYOK API key behaviour:
+                - Omitted / not passed: existing key is preserved (field absent
+                  from request body).
+                - ``None``: explicitly clears BYOK and reverts to the shared
+                  platform key (field sent as ``null``).
+                - ``str``: sets a new BYOK key.  Sent over TLS only; never logged.
             api_base: Optional self-hosted endpoint URL (vLLM / Ollama / OpenRouter).
             max_tokens: Maximum tokens per response (1–200 000, default 4096).
             temperature: Sampling temperature (0–2, default 0.0).
@@ -887,18 +895,23 @@ class AsyncTeardropClient:
         """
         # Validate locally before the network round-trip so the error message
         # includes which enum values are valid.
-        request = SetLlmConfigRequest(
+        req_kwargs: dict[str, Any] = dict(
             provider=provider,  # type: ignore[arg-type]
             model=model,
-            api_key=api_key,
             api_base=api_base,
             max_tokens=max_tokens,
             temperature=temperature,
             timeout_seconds=timeout_seconds,
             routing_preference=routing_preference,  # type: ignore[arg-type]
         )
-        # api_key is excluded when None so the server preserves the existing key.
+        if api_key is not _UNSET:
+            req_kwargs["api_key"] = api_key
+        request = SetLlmConfigRequest(**req_kwargs)
+        # Exclude None values (api_base etc.) but preserve explicit api_key=None
+        # which signals the backend to clear BYOK and revert to the shared key.
         body = request.model_dump(exclude_none=True)
+        if "api_key" in request.model_fields_set and request.api_key is None:
+            body["api_key"] = None
 
         http = await self._get_http()
         resp = await http.put(
