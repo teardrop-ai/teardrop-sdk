@@ -41,11 +41,15 @@ from teardrop.models import (
     MODELS_BY_PROVIDER,
     MarketplaceSubscription,
     MarketplaceTool,
+    MeResponse,
     MemoryEntry,
     ModelBenchmarksResponse,
+    OrgCredentialsEntry,
+    OrgCredentialsResponse,
     OrgLlmConfig,
     OrgMcpServer,
     OrgTool,
+    RegenerateCredentialsResponse,
     SSEEvent,
     SetLlmConfigRequest,
     StoreMemoryRequest,
@@ -237,12 +241,12 @@ class AsyncTeardropClient:
         http = await self._get_http()
         return await self._token_manager.authenticate_siwe(http, message, signature)
 
-    async def get_me(self) -> JwtPayloadBase:
-        """GET /auth/me — return authenticated identity claims."""
+    async def get_me(self) -> MeResponse:
+        """GET /auth/me — return authenticated identity claims plus org_name."""
         http = await self._get_http()
         resp = await http.get(f"{self._base_url}/auth/me", headers=await self._headers())
         self._raise_for_status(resp)
-        return JwtPayloadBase.model_validate(resp.json())
+        return MeResponse.model_validate(resp.json())
 
     async def register(
         self, *, org_name: str, email: str, password: str
@@ -725,13 +729,32 @@ class AsyncTeardropClient:
     async def get_marketplace_catalog(
         self,
         *,
+        org_slug: str | None = None,
+        sort: str | None = None,
         limit: int | None = None,
+        cursor: str | None = None,
     ) -> dict[str, Any]:
-        """GET /marketplace/catalog — browse published marketplace tools (no auth required)."""
+        """GET /marketplace/catalog — browse published marketplace tools (no auth required).
+
+        Args:
+            org_slug: Filter by author org slug. Use ``"platform"`` for Teardrop built-in tools.
+            sort: Sort order — ``"name"``, ``"price_asc"``, or ``"price_desc"`` (default: ``"name"``)
+            limit: Results per page (1–200, default: 100).
+            cursor: Opaque pagination token from a previous response's ``next_cursor``.
+
+        Returns:
+            ``{"tools": list[MarketplaceTool], "next_cursor": str | None}``
+        """
         http = await self._get_http()
         params: dict[str, Any] = {}
+        if org_slug is not None:
+            params["org_slug"] = org_slug
+        if sort is not None:
+            params["sort"] = sort
         if limit is not None:
             params["limit"] = limit
+        if cursor is not None:
+            params["cursor"] = cursor
         resp = await http.get(f"{self._base_url}/marketplace/catalog", params=params)
         self._raise_for_status(resp)
         data = resp.json()
@@ -767,17 +790,36 @@ class AsyncTeardropClient:
         self._raise_for_status(resp)
         return resp.json()
 
-    async def get_earnings(self, *, limit: int = 20) -> list[EarningsEntry]:
-        """GET /marketplace/earnings — earnings history."""
+    async def get_earnings(
+        self,
+        *,
+        limit: int = 20,
+        tool_name: str | None = None,
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        """GET /marketplace/earnings — earnings history (cursor-paginated).
+
+        Returns:
+            ``{"earnings": list[EarningsEntry], "next_cursor": str | None}``
+        """
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
+        if tool_name is not None:
+            params["tool_name"] = tool_name
+        if cursor is not None:
+            params["cursor"] = cursor
         resp = await http.get(
             f"{self._base_url}/marketplace/earnings",
             headers=await self._headers(),
             params=params,
         )
         self._raise_for_status(resp)
-        return [EarningsEntry.model_validate(e) for e in resp.json()]
+        data = resp.json()
+        if isinstance(data, list):
+            # Handle legacy flat-array response shape
+            return {"earnings": [EarningsEntry.model_validate(e) for e in data], "next_cursor": None}
+        data["earnings"] = [EarningsEntry.model_validate(e) for e in data.get("earnings", [])]
+        return data
 
     async def withdraw(self, request: WithdrawRequest) -> dict[str, Any]:
         """POST /marketplace/withdraw — request a marketplace earnings payout."""
@@ -790,17 +832,32 @@ class AsyncTeardropClient:
         self._raise_for_status(resp)
         return resp.json()
 
-    async def get_withdrawals(self, *, limit: int = 20) -> list[dict[str, Any]]:
-        """GET /marketplace/withdrawals — withdrawal history."""
+    async def get_withdrawals(
+        self,
+        *,
+        limit: int = 20,
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        """GET /marketplace/withdrawals — withdrawal history (cursor-paginated).
+
+        Returns:
+            ``{"withdrawals": list[dict], "next_cursor": str | None}``
+        """
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
         resp = await http.get(
             f"{self._base_url}/marketplace/withdrawals",
             headers=await self._headers(),
             params=params,
         )
         self._raise_for_status(resp)
-        return resp.json()
+        data = resp.json()
+        if isinstance(data, list):
+            # Handle legacy flat-array response shape
+            return {"withdrawals": data, "next_cursor": None}
+        return data
 
     async def subscribe(self, qualified_tool_name: str) -> MarketplaceSubscription:
         """POST /marketplace/subscriptions — subscribe to a marketplace tool."""
@@ -925,6 +982,36 @@ class AsyncTeardropClient:
         self._llm_config_cache = (config, time.time())
         return config
 
+    async def clear_llm_api_key(
+        self,
+        *,
+        provider: str,
+        model: str,
+        routing_preference: str = "default",
+        api_base: str | None = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.0,
+        timeout_seconds: int = 120,
+    ) -> OrgLlmConfig:
+        """PUT /llm-config with ``api_key=None`` — remove BYOK key, keep other config.
+
+        Convenience wrapper for clients that strip ``None`` values before
+        JSON serialisation.  Explicitly sends ``api_key: null`` so the backend
+        reverts to the shared platform key.
+
+        All other args are required and forwarded to the config update.
+        """
+        return await self.set_llm_config(
+            provider=provider,
+            model=model,
+            routing_preference=routing_preference,
+            api_key=None,
+            api_base=api_base,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout_seconds=timeout_seconds,
+        )
+
     async def delete_llm_config(self) -> dict[str, Any]:
         """DELETE /llm-config — remove the org's custom LLM config.
 
@@ -977,7 +1064,7 @@ class AsyncTeardropClient:
         """Return the list of supported LLM providers (client-side constant).
 
         Returns:
-            ``["anthropic", "openai", "google"]``
+            ``["anthropic", "openai", "google", "openrouter"]``
         """
         return list(MODELS_BY_PROVIDER.keys())
 

@@ -40,6 +40,13 @@ class JwtPayloadBase(BaseModel):
     model_config = {"extra": "allow"}
 
 
+class MeResponse(JwtPayloadBase):
+    """Response from GET /auth/me — JWT claims plus org_name resolved from the database."""
+
+    org_name: str = ""
+    """Org display name; empty string for config-based client_credentials tokens with no org row."""
+
+
 # ─── Agent ────────────────────────────────────────────────────────────────────
 
 
@@ -200,7 +207,7 @@ class CreateOrgToolRequest(BaseModel):
     webhook_method: str | None = None
     auth_header_name: str | None = None
     auth_header_value: str | None = None
-    timeout_seconds: int | None = None
+    timeout_seconds: int | None = None  # default 10, max 30
     publish_as_mcp: bool | None = None
     marketplace_description: str | None = None
     base_price_usdc: int | None = None
@@ -347,14 +354,12 @@ class MemoryEntry(BaseModel):
 
 
 class MarketplaceTool(BaseModel):
-    name: str
-    qualified_name: str
+    name: str  # qualified name: "{org_slug}/{tool_name}" or "platform/{tool_name}"
     description: str
-    marketplace_description: str | None = None
     input_schema: dict[str, Any] = Field(default_factory=dict)
     cost_usdc: int = 0
-    author_org_name: str = ""
-    author_org_slug: str = ""
+    author: str = ""  # author org display name (e.g. "Teardrop" for platform tools)
+    author_slug: str = ""  # author org slug (e.g. "platform" for Teardrop built-in tools)
 
 
 class AuthorConfig(BaseModel):
@@ -367,7 +372,7 @@ class AuthorConfig(BaseModel):
 class EarningsEntry(BaseModel):
     id: str
     tool_name: str
-    amount_usdc: int
+    total_cost_usdc: int = 0  # total charged to the caller
     caller_org_id: str = ""
     author_share_usdc: int = 0
     platform_share_usdc: int = 0
@@ -459,6 +464,8 @@ class ModelInfo(BaseModel):
     supports_tools: bool = False
     supports_streaming: bool = False
     quality_tier: int = 0
+    knowledge_cutoff: str = ""  # model training data cutoff date (e.g. "2025-10") or "Unknown"
+    training_cutoff_note: str = ""  # human-readable description (e.g. "Training data through October 2025")
     pricing: ModelPricing = Field(default_factory=ModelPricing)
     benchmarks: ModelRunBenchmarks | None = None
 
@@ -485,16 +492,42 @@ class AddTrustedAgentRequest(BaseModel):
 
 class TrustedAgent(BaseModel):
     id: str
-    org_id: str
+    org_id: str | None = None  # present on create response; absent from list response
     agent_url: str
     label: str | None = None
-    max_cost_usdc: int | None = None
+    max_cost_usdc: int = 0
     require_x402: bool = False
     jwt_forward: bool = False
-    is_active: bool = True
-    created_at: str = ""
+    created_at: str | None = None  # present on list response; absent from create response
 
     model_config = {"extra": "allow"}
+
+
+# ─── Org Credentials ─────────────────────────────────────────────────────────
+
+
+class OrgCredentialsEntry(BaseModel):
+    """A single M2M credential entry (secret is never returned)."""
+
+    client_id: str
+    created_at: str = ""
+
+
+class OrgCredentialsResponse(BaseModel):
+    """Response from GET /org/credentials."""
+
+    credentials: list[OrgCredentialsEntry] = Field(default_factory=list)
+
+
+class RegenerateCredentialsResponse(BaseModel):
+    """Response from POST /org/credentials/regenerate.
+
+    ``client_secret`` is returned exactly once — callers must store it immediately.
+    """
+
+    client_id: str
+    client_secret: str  # plaintext; never retrievable after this response
+    created_at: str = ""
 
 
 # ─── Agent Wallets ─────────────────────────────────────────────────────────────
