@@ -8,7 +8,7 @@ Skipped automatically when integration env vars are not set.
 
 from __future__ import annotations
 
-import pytest
+import uuid
 
 from teardrop.client import AsyncTeardropClient
 from teardrop.models import (
@@ -38,17 +38,18 @@ class TestMemoryRoundTrip:
 class TestToolRoundTrip:
     async def test_create_and_delete_tool(self, async_client: AsyncTeardropClient) -> None:
         tool: OrgTool | None = None
+        name = f"smoketool_{uuid.uuid4().hex[:8]}"
         try:
             tool = await async_client.create_tool(
                 CreateOrgToolRequest(
-                    name="smoketool",
+                    name=name,
                     description="Smoke test tool — safe to delete",
                     input_schema={"type": "object", "properties": {}, "required": []},
                     webhook_url="https://example.com/smoke-tool",
                 )
             )
             assert tool.id
-            assert tool.name == "smoketool"
+            assert tool.name == name
         finally:
             if tool is not None:
                 await async_client.delete_tool(tool.id)
@@ -59,15 +60,16 @@ class TestMcpServerRoundTrip:
         self, async_client: AsyncTeardropClient
     ) -> None:
         server: OrgMcpServer | None = None
+        name = f"smokemcp_{uuid.uuid4().hex[:8]}"
         try:
             server = await async_client.create_mcp_server(
                 CreateMcpServerRequest(
-                    name="smokemcp",
+                    name=name,
                     url="https://example.com/smoke-mcp",
                 )
             )
             assert server.id
-            assert server.name == "smokemcp"
+            assert server.name == name
         finally:
             if server is not None:
                 await async_client.delete_mcp_server(server.id)

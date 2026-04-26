@@ -55,7 +55,7 @@ class TestAuthenticatedReadOnly:
     async def test_get_me(self, async_client: AsyncTeardropClient) -> None:
         result = await async_client.get_me()
         assert isinstance(result, MeResponse)
-        assert result.org_slug  # Must be non-empty
+        assert result.org_id  # Must be non-empty
 
     async def test_get_balance(self, async_client: AsyncTeardropClient) -> None:
         result = await async_client.get_balance()

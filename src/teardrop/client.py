@@ -461,7 +461,9 @@ class AsyncTeardropClient:
             params=params,
         )
         self._raise_for_status(resp)
-        return [CreditHistoryEntry.model_validate(i) for i in resp.json()]
+        data = resp.json()
+        items = data["items"] if isinstance(data, dict) and "items" in data else data
+        return [CreditHistoryEntry.model_validate(i) for i in items]
 
     async def topup_stripe(self, request: StripeTopupRequest) -> StripeTopupResponse:
         """POST /billing/topup/stripe — start a Stripe checkout session."""
@@ -642,7 +644,12 @@ class AsyncTeardropClient:
         http = await self._get_http()
         resp = await http.get(f"{self._base_url}/tools", headers=await self._headers())
         self._raise_for_status(resp)
-        return [OrgTool.model_validate(t) for t in resp.json()]
+        data = resp.json()
+        if isinstance(data, dict):
+            items = data.get("items") or data.get("tools") or []
+        else:
+            items = data
+        return [OrgTool.model_validate(t) for t in items]
 
     async def get_tool(self, tool_id: str) -> OrgTool:
         """GET /tools/{tool_id} — fetch a single tool by ID."""
@@ -693,7 +700,12 @@ class AsyncTeardropClient:
         http = await self._get_http()
         resp = await http.get(f"{self._base_url}/mcp/servers", headers=await self._headers())
         self._raise_for_status(resp)
-        return [OrgMcpServer.model_validate(s) for s in resp.json()]
+        data = resp.json()
+        if isinstance(data, dict):
+            items = data.get("items") or data.get("mcp_servers") or data.get("servers") or []
+        else:
+            items = data
+        return [OrgMcpServer.model_validate(s) for s in items]
 
     async def get_mcp_server(self, server_id: str) -> OrgMcpServer:
         """GET /mcp/servers/{server_id} — fetch a single MCP server by ID."""
@@ -760,7 +772,9 @@ class AsyncTeardropClient:
             params=params,
         )
         self._raise_for_status(resp)
-        return [MemoryEntry.model_validate(m) for m in resp.json()]
+        data = resp.json()
+        items = data["items"] if isinstance(data, dict) and "items" in data else data
+        return [MemoryEntry.model_validate(m) for m in items]
 
     async def create_memory(self, request: StoreMemoryRequest) -> MemoryEntry:
         """POST /memories — store a memory entry."""
@@ -935,7 +949,9 @@ class AsyncTeardropClient:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return [MarketplaceSubscription.model_validate(s) for s in resp.json()]
+        data = resp.json()
+        items = data["subscriptions"] if isinstance(data, dict) and "subscriptions" in data else data
+        return [MarketplaceSubscription.model_validate(s) for s in items]
 
     async def unsubscribe(self, subscription_id: str) -> None:
         """DELETE /marketplace/subscriptions/{id} — unsubscribe."""
