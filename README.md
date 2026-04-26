@@ -752,4 +752,16 @@ pytest
 pytest --cov=teardrop --cov-report=term-missing
 ```
 
-139 tests covering client methods, streaming, auth, models, and LLM configuration.
+### Integration Tests
+
+Integration tests make real HTTP requests against the Teardrop API. Set the following environment variables to enable them:
+
+```bash
+export TEARDROP_TEST_URL="https://api.teardrop.dev"
+export TEARDROP_TEST_EMAIL="you@example.com"
+export TEARDROP_TEST_SECRET="your-password"
+
+pytest tests/integration/ -v
+```
+
+Without those variables set, all integration tests are skipped automatically.

@@ -11,7 +11,10 @@ from teardrop.streaming import (
     EVENT_TEXT_MSG_CONTENT,
     async_collect_text,
     collect_text,
+    format_usdc,
     iter_sse_events,
+    parse_marketplace_tool_name,
+    parse_usdc,
 )
 
 # Helper: build a spec-format SSE data line
@@ -150,6 +153,43 @@ class TestIterSseEvents:
         assert events[0].retry is None
 
     @pytest.mark.asyncio
+    async def test_wire_format_event_field(self):
+        """Standard SSE wire format: separate `event:` line (not embedded in JSON)."""
+        lines = [
+            "event: CUSTOM_TYPE",
+            'data: {"key": "value"}',
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert len(events) == 1
+        # event: field becomes sse_event_type fallback; JSON has no "event" key
+        assert events[0].type == "CUSTOM_TYPE"
+        assert events[0].data == {"key": "value"}
+
+    @pytest.mark.asyncio
+    async def test_json_dict_without_event_key(self):
+        """JSON data that is a dict but lacks 'event' key hits the else branch."""
+        lines = [
+            'data: {"foo": "bar"}',
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert len(events) == 1
+        assert events[0].data == {"foo": "bar"}
+        assert events[0].type == "message"
+
+    @pytest.mark.asyncio
+    async def test_malformed_json_starting_with_brace(self):
+        """Data starting with '{' but invalid JSON hits the JSONDecodeError except branch."""
+        lines = [
+            "data: {not valid json}",
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert len(events) == 1
+        assert events[0].data == {"raw": "{not valid json}"}
+
+    @pytest.mark.asyncio
     async def test_id_resets_between_events(self):
         """id: field should reset between event blocks."""
         lines = [
@@ -214,3 +254,67 @@ class TestAsyncCollectText:
 
         result = await async_collect_text(_source())
         assert result == "hi"
+
+
+# ─── parse_marketplace_tool_name ─────────────────────────────────────────────
+
+
+class TestParseMarketplaceToolName:
+    def test_standard_format(self):
+        result = parse_marketplace_tool_name("acme/search")
+        assert result == {"org_slug": "acme", "tool_name": "search"}
+
+    def test_platform_slug(self):
+        result = parse_marketplace_tool_name("platform/geocode")
+        assert result == {"org_slug": "platform", "tool_name": "geocode"}
+
+    def test_nested_slash_splits_on_first(self):
+        result = parse_marketplace_tool_name("acme/foo/bar")
+        assert result == {"org_slug": "acme", "tool_name": "foo/bar"}
+
+    def test_no_slash_raises_value_error(self):
+        with pytest.raises(ValueError, match="org_slug/tool_name"):
+            parse_marketplace_tool_name("noseparator")
+
+    def test_leading_slash_raises_value_error(self):
+        # idx == 0 → org_slug would be empty string
+        with pytest.raises(ValueError):
+            parse_marketplace_tool_name("/tool_name")
+
+
+# ─── format_usdc ──────────────────────────────────────────────────────────────
+
+
+class TestFormatUsdc:
+    def test_one_and_a_half(self):
+        assert format_usdc(1_500_000) == "1.500000"
+
+    def test_small_value(self):
+        assert format_usdc(50) == "0.000050"
+
+    def test_zero(self):
+        assert format_usdc(0) == "0.000000"
+
+    def test_one_dollar(self):
+        assert format_usdc(1_000_000) == "1.000000"
+
+
+# ─── parse_usdc ───────────────────────────────────────────────────────────────
+
+
+class TestParseUsdc:
+    def test_one_fifty(self):
+        assert parse_usdc("1.50") == 1_500_000
+
+    def test_quarter_dollar(self):
+        assert parse_usdc("0.25") == 250_000
+
+    def test_float_input(self):
+        assert parse_usdc(0.5) == 500_000
+
+    def test_zero(self):
+        assert parse_usdc("0") == 0
+
+    def test_round_trip(self):
+        original = 123_456
+        assert parse_usdc(format_usdc(original)) == original

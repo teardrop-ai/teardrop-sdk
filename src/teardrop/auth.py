@@ -8,6 +8,7 @@ import logging
 import time
 from typing import Any
 
+import anyio
 import httpx
 
 from teardrop.exceptions import AuthenticationError
@@ -46,6 +47,7 @@ class TokenManager:
         self._token = token
         self._refresh_token: str | None = None
         self._expires_at: float = 0.0
+        self._lock: anyio.Lock = anyio.Lock()
 
         if token:
             self._expires_at = self._read_exp(token)
@@ -67,9 +69,13 @@ class TokenManager:
                 return self._token  # Static token, no refresh possible.
             raise AuthenticationError("No credentials configured for token refresh.")
 
-        self._token = await self._fetch_token(client)
-        self._expires_at = self._read_exp(self._token)
-        logger.debug("Token refreshed, expires_at=%.0f", self._expires_at)
+        async with self._lock:
+            # Re-check under the lock — another coroutine may have refreshed already.
+            if self._token and (time.time() < self._expires_at - _REFRESH_BUFFER):
+                return self._token
+            self._token = await self._fetch_token(client)
+            self._expires_at = self._read_exp(self._token)
+            logger.debug("Token refreshed, expires_at=%.0f", self._expires_at)
         return self._token
 
     async def _fetch_token(self, client: httpx.AsyncClient) -> str:

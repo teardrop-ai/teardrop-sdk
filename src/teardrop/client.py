@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import time
 import uuid
 from typing import Any, AsyncIterator
@@ -19,6 +20,7 @@ from teardrop.exceptions import (
     NotFoundError,
     PaymentRequiredError,
     RateLimitError,
+    TeardropError,
     ValidationError,
 )
 from teardrop.models import (
@@ -85,6 +87,61 @@ _LLM_CONFIG_TTL: int = 300
 _MODEL_BENCHMARKS_TTL: int = 600
 
 
+class _HttpProxy:
+    """Wraps ``httpx.AsyncClient`` to translate transport errors into ``TeardropError``.
+
+    Returned by ``AsyncTeardropClient._get_http()`` so every HTTP call is
+    automatically covered without modifying individual callsites.
+    """
+
+    __slots__ = ("_c",)
+
+    def __init__(self, client: httpx.AsyncClient) -> None:
+        self._c = client
+
+    @property
+    def is_closed(self) -> bool:
+        return self._c.is_closed
+
+    async def aclose(self) -> None:
+        await self._c.aclose()
+
+    async def _call(self, method: str, url: str, **kw: Any) -> httpx.Response:
+        try:
+            return await getattr(self._c, method)(url, **kw)
+        except httpx.ConnectError as exc:
+            raise TeardropError(f"Connection failed: {exc}") from exc
+        except httpx.TimeoutException as exc:
+            raise TeardropError(f"Request timed out: {exc}") from exc
+
+    async def get(self, url: str, **kw: Any) -> httpx.Response:
+        return await self._call("get", url, **kw)
+
+    async def post(self, url: str, **kw: Any) -> httpx.Response:
+        return await self._call("post", url, **kw)
+
+    async def put(self, url: str, **kw: Any) -> httpx.Response:
+        return await self._call("put", url, **kw)
+
+    async def patch(self, url: str, **kw: Any) -> httpx.Response:
+        return await self._call("patch", url, **kw)
+
+    async def delete(self, url: str, **kw: Any) -> httpx.Response:
+        return await self._call("delete", url, **kw)
+
+    @contextlib.asynccontextmanager
+    async def stream(
+        self, method: str, url: str, **kw: Any
+    ) -> AsyncIterator[httpx.Response]:
+        try:
+            async with self._c.stream(method, url, **kw) as resp:
+                yield resp
+        except httpx.ConnectError as exc:
+            raise TeardropError(f"Connection failed: {exc}") from exc
+        except httpx.TimeoutException as exc:
+            raise TeardropError(f"Request timed out: {exc}") from exc
+
+
 class AsyncTeardropClient:
     """Async client for the Teardrop API.
 
@@ -128,10 +185,10 @@ class AsyncTeardropClient:
         # Public model benchmarks cache
         self._model_benchmarks_cache: tuple[ModelBenchmarksResponse, float] | None = None
 
-    async def _get_http(self) -> httpx.AsyncClient:
+    async def _get_http(self) -> _HttpProxy:
         if self._http is None or self._http.is_closed:
             self._http = httpx.AsyncClient(timeout=self._timeout)
-        return self._http
+        return _HttpProxy(self._http)
 
     async def _headers(self) -> dict[str, str]:
         http = await self._get_http()

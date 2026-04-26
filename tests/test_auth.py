@@ -5,7 +5,9 @@ from __future__ import annotations
 import base64
 import json
 import time
+from unittest.mock import AsyncMock, patch
 
+import anyio
 import pytest
 
 from teardrop.auth import TokenManager
@@ -131,6 +133,44 @@ class TestGetToken:
             await tm.get_token(client)
 
 
+class TestFetchTokenClientCredentials:
+    @pytest.mark.asyncio
+    async def test_client_credentials_path(self):
+        """_fetch_token should send client_id/client_secret when those are set."""
+        import time as _time
+        new_token = _make_jwt(exp=_time.time() + 3600)
+        client = _FakeClient(
+            _FakeHTTPResponse(
+                200, {"access_token": new_token, "token_type": "bearer", "expires_in": 3600}
+            )
+        )
+        tm = TokenManager("http://x", client_id="cid", client_secret="csec")
+        # Expire the (non-existent) token so a fetch is triggered
+        tm._expires_at = 0.0
+        result = await tm.get_token(client)
+        assert result == new_token
+
+    @pytest.mark.asyncio
+    async def test_refresh_token_stored_when_present(self):
+        """When the token response contains a refresh_token it must be stored."""
+        import time as _time
+        new_token = _make_jwt(exp=_time.time() + 3600)
+        client = _FakeClient(
+            _FakeHTTPResponse(
+                200,
+                {
+                    "access_token": new_token,
+                    "token_type": "bearer",
+                    "expires_in": 3600,
+                    "refresh_token": "rt-fresh",
+                },
+            )
+        )
+        tm = TokenManager("http://x", email="e", secret="s")
+        await tm.get_token(client)
+        assert tm._refresh_token == "rt-fresh"
+
+
 class TestAuthenticateSIWE:
     @pytest.mark.asyncio
     async def test_success(self):
@@ -150,3 +190,32 @@ class TestAuthenticateSIWE:
         tm = TokenManager("http://x")
         with pytest.raises(AuthenticationError):
             await tm.authenticate_siwe(client, "bad", "bad")
+
+
+class TestGetTokenConcurrency:
+    """Verify that concurrent calls with an expired token fire _fetch_token exactly once."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_refresh_calls_fetch_once(self):
+        """10 concurrent get_token() calls on an expired token must call _fetch_token once."""
+        import time as _time
+
+        new_token = _make_jwt(exp=_time.time() + 3600)
+        response = _FakeHTTPResponse(
+            200, {"access_token": new_token, "token_type": "bearer", "expires_in": 3600}
+        )
+
+        tm = TokenManager("http://x", email="e", secret="s")
+        tm._expires_at = 0.0  # force token as expired
+
+        fetch_mock = AsyncMock(return_value=new_token)
+
+        async def run_concurrently() -> None:
+            async with anyio.create_task_group() as tg:
+                for _ in range(10):
+                    tg.start_soon(tm.get_token, _FakeClient(response))
+
+        with patch.object(tm, "_fetch_token", fetch_mock):
+            await run_concurrently()
+
+        fetch_mock.assert_called_once()

@@ -16,6 +16,7 @@ from teardrop.exceptions import (
     ForbiddenError,
     PaymentRequiredError,
     RateLimitError,
+    TeardropError,
 )
 from teardrop.models import (
     AgentCard,
@@ -46,6 +47,21 @@ class TestRaiseForStatus:
         client = AsyncTeardropClient("http://test", token="tok.en.sig")
         resp = _json_response({"ok": True}, status=200)
         client._raise_for_status(resp)  # Should not raise
+
+    def test_non_json_body_falls_back_to_text(self):
+        """When the error response has no JSON body, body is set to the raw text."""
+        client = AsyncTeardropClient("http://test", token="tok.en.sig")
+        resp = httpx.Response(
+            status_code=500,
+            content=b"Internal Server Error",
+            headers={"content-type": "text/plain"},
+            request=httpx.Request("GET", "http://test"),
+        )
+        from teardrop.exceptions import APIError
+        with pytest.raises(APIError) as exc_info:
+            client._raise_for_status(resp)
+        # body attribute should contain the raw response text
+        assert exc_info.value.body == "Internal Server Error"
 
     def test_401_raises_auth_error(self):
         client = AsyncTeardropClient("http://test", token="tok.en.sig")
@@ -91,6 +107,27 @@ class TestRaiseForStatus:
 
 
 class TestRun:
+    @pytest.mark.asyncio
+    async def test_run_with_usage_date_params(self):
+        """get_usage forwards optional start/end params."""
+        from unittest.mock import AsyncMock, patch
+        from teardrop.models import UsageSummary
+
+        client = AsyncTeardropClient("http://test", token="tok.en.sig")
+        mock = AsyncMock()
+        mock.is_closed = False
+        mock.get.return_value = _json_response(
+            {"total_runs": 0, "total_tokens_in": 0, "total_tokens_out": 0,
+             "total_tool_calls": 0, "total_duration_ms": 0}
+        )
+        client._http = mock
+        with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+            result = await client.get_usage(start="2026-01-01", end="2026-01-31")
+        assert isinstance(result, UsageSummary)
+        _, kwargs = mock.get.call_args
+        assert kwargs["params"]["start"] == "2026-01-01"
+        assert kwargs["params"]["end"] == "2026-01-31"
+
     @pytest.mark.asyncio
     async def test_run_message_too_long_raises(self):
         """AgentRunRequest enforces max_length=4096 before any HTTP call."""
@@ -457,3 +494,26 @@ class TestFromAgentCard:
                 mock_http.get.assert_called_once()
             finally:
                 await client.close()
+
+
+class TestTransportErrors:
+    """Verify that httpx transport errors are wrapped into TeardropError."""
+
+    @pytest.mark.asyncio
+    async def test_connect_error_raises_teardrop_error(self, client, mock_http):
+        mock_http.get.side_effect = httpx.ConnectError("refused")
+        with pytest.raises(TeardropError, match="Connection failed"):
+            await client.get_me()
+
+    @pytest.mark.asyncio
+    async def test_timeout_error_raises_teardrop_error(self, client, mock_http):
+        mock_http.get.side_effect = httpx.TimeoutException("timed out")
+        with pytest.raises(TeardropError, match="Request timed out"):
+            await client.get_me()
+
+    @pytest.mark.asyncio
+    async def test_connect_error_on_post_raises_teardrop_error(self, client, mock_http):
+        mock_http.post.side_effect = httpx.ConnectError("refused")
+        with pytest.raises(TeardropError, match="Connection failed"):
+            from teardrop.models import StoreMemoryRequest
+            await client.create_memory(StoreMemoryRequest(content="test"))

@@ -511,3 +511,44 @@ class TestProviderHelpers:
         assert "anthropic" in MODELS_BY_PROVIDER
         assert "openai" in MODELS_BY_PROVIDER
         assert "google" in MODELS_BY_PROVIDER
+
+
+# ─── clear_llm_api_key ────────────────────────────────────────────────────────
+
+
+class TestClearLlmApiKey:
+    @pytest.mark.asyncio
+    async def test_sends_null_api_key(self):
+        """clear_llm_api_key() must send api_key: null so the backend reverts to shared key."""
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.put = AsyncMock(return_value=_json_response(_ORG_LLM_CONFIG))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+                await client.clear_llm_api_key(
+                    provider="anthropic",
+                    model="claude-haiku-4-5-20251001",
+                )
+
+        call_kwargs = mock_http.put.call_args
+        body = call_kwargs.kwargs["json"]
+        assert "api_key" in body
+        assert body["api_key"] is None
+
+    @pytest.mark.asyncio
+    async def test_returns_org_llm_config(self):
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.put = AsyncMock(return_value=_json_response(_ORG_LLM_CONFIG))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+                result = await client.clear_llm_api_key(
+                    provider="anthropic",
+                    model="claude-haiku-4-5-20251001",
+                )
+
+        assert isinstance(result, OrgLlmConfig)
