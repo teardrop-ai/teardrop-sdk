@@ -299,12 +299,23 @@ async for event in client.run(
 
 ### x402 On-chain Payments
 
-If the agent returns a `402 Payment Required` the SDK raises `PaymentRequiredError`. Resolve the payment externally and retry passing the x402 payment header:
+If the agent returns a `402 Payment Required` the SDK raises `PaymentRequiredError`. You can extract the requirements and the `payment_header` from the error to resolve the payment externally, then retry passing the x402 payment header:
+
+```python
+try:
+    async for event in client.run("..."):
+        ...
+except PaymentRequiredError as e:
+    # Resolve the payment using e.requirements and e.payment_header
+    # Then retry with the resulting signature:
+    async for event in client.run("...", payment_header="sig_...")
+```
 
 ```python
 async for event in client.run(
     "...",
-    payment_header="...",   # X-Payment header value from 402 response
+    payment_header="...",   # X-Payment header value (retry after resolving 402)
+    emit_ui=False           # Optional: disable SURFACE_UPDATE events (default: True)
 ):
     ...
 ```
@@ -335,14 +346,16 @@ class SSEEvent:
 
 ### x402 On-chain Payments
 
-If the agent returns a `402 Payment Required` the SDK raises `PaymentRequiredError`. Resolve the payment externally and retry passing the x402 payment header:
+If the agent returns a `402 Payment Required` the SDK raises `PaymentRequiredError`. You can extract the requirements and the `payment_header` from the error to resolve the payment externally, then retry passing the x402 payment header:
 
 ```python
-async for event in client.run(
-    "...",
-    payment_header="...",   # X-Payment header value from 402 response
-):
-    ...
+try:
+    async for event in client.run("..."):
+        ...
+except PaymentRequiredError as e:
+    # Resolve the payment using e.requirements and e.payment_header
+    # Then retry with the resulting signature:
+    async for event in client.run("...", payment_header="sig_...")
 ```
 
 ---
