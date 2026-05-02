@@ -211,7 +211,10 @@ class AsyncTeardropClient:
         if resp.status_code == 402:
             detail = body.get("error", "Payment required") if isinstance(body, dict) else str(body)
             reqs = body if isinstance(body, dict) else {}
-            raise PaymentRequiredError(detail, requirements=reqs)
+            payment_header = resp.headers.get("X-PAYMENT-REQUIRED")
+            raise PaymentRequiredError(
+                detail, requirements=reqs, payment_header=payment_header
+            )
         if resp.status_code == 403:
             detail = body.get("detail", "Forbidden") if isinstance(body, dict) else str(body)
             raise ForbiddenError(detail)
@@ -244,6 +247,7 @@ class AsyncTeardropClient:
         thread_id: str | None = None,
         context: dict[str, Any] | None = None,
         payment_header: str | None = None,
+        emit_ui: bool = True,
     ) -> AsyncIterator[SSEEvent]:
         """Stream an agent run, yielding parsed SSE events.
 
@@ -252,6 +256,7 @@ class AsyncTeardropClient:
             thread_id: Optional conversation thread ID (auto-generated if omitted).
             context: Optional extra context passed to agent state metadata.
             payment_header: Pre-signed x402 payment header (for retry after 402).
+            emit_ui: Controls whether UI surface events are emitted.
         """
         http = await self._get_http()
         headers = await self._headers()
@@ -264,6 +269,7 @@ class AsyncTeardropClient:
             message=message,
             thread_id=thread_id or str(uuid.uuid4()),
             context=context,
+            emit_ui=emit_ui,
         )
         body = req.model_dump(exclude_none=True)
 

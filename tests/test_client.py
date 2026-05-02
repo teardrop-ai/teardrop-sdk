@@ -71,9 +71,16 @@ class TestRaiseForStatus:
 
     def test_402_raises_payment_error(self):
         client = AsyncTeardropClient("http://test", token="tok.en.sig")
-        resp = _json_response({"error": "Insufficient credits"}, status=402)
-        with pytest.raises(PaymentRequiredError, match="Insufficient credits"):
+        resp = _json_response(
+            {"error": "Insufficient credits", "accepts": [{"method": "usdc"}]},
+            status=402,
+            headers={"X-PAYMENT-REQUIRED": "req_123"},
+        )
+        with pytest.raises(PaymentRequiredError) as exc_info:
             client._raise_for_status(resp)
+        assert exc_info.value.detail == "Insufficient credits"
+        assert exc_info.value.payment_header == "req_123"
+        assert exc_info.value.requirements["accepts"][0]["method"] == "usdc"
 
     def test_403_raises_forbidden_error(self):
         client = AsyncTeardropClient("http://test", token="tok.en.sig")
@@ -168,13 +175,17 @@ class TestRun:
         async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
             client._http = mock_http
             with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
-                events = [e async for e in client.run("hello")]
+                events = [e async for e in client.run("hello", emit_ui=False)]
 
         assert len(events) == 3
         assert events[0].type == "RUN_STARTED"
         assert events[1].type == "TEXT_MESSAGE_CONTENT"
         assert events[1].data["delta"] == "hi"
         assert events[2].type == "DONE"
+
+        # Verify emit_ui was passed in request body
+        args, kwargs = mock_http.stream.call_args
+        assert kwargs["json"]["emit_ui"] is False
 
 
 class TestGetBalance:

@@ -22,13 +22,18 @@ class PaymentRequiredError(TeardropError):
 
     Attributes:
         requirements: The x402 payment requirements dict from the server.
+        payment_header: The value of the X-PAYMENT-REQUIRED response header.
     """
 
     def __init__(
-        self, detail: str = "Payment required", requirements: dict[str, Any] | None = None
+        self,
+        detail: str = "Payment required",
+        requirements: dict[str, Any] | None = None,
+        payment_header: str | None = None,
     ):
         self.detail = detail
         self.requirements = requirements or {}
+        self.payment_header = payment_header
         super().__init__(detail)
 
 

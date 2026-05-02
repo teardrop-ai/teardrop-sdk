@@ -54,6 +54,7 @@ class AgentRunRequest(BaseModel):
     message: str = Field(..., max_length=4096)
     thread_id: str = ""
     context: dict[str, Any] | None = None
+    emit_ui: bool = True
 
 
 class SSEEvent(BaseModel):
