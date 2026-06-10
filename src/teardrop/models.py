@@ -50,11 +50,18 @@ class MeResponse(JwtPayloadBase):
 # ─── Agent ────────────────────────────────────────────────────────────────────
 
 
+class ToolPolicy(BaseModel):
+    """Per-run tool exclusion policy for agent runs."""
+
+    exclude_names: list[str] = Field(default_factory=list)
+
+
 class AgentRunRequest(BaseModel):
     message: str = Field(..., max_length=4096)
     thread_id: str = ""
     context: dict[str, Any] | None = None
     emit_ui: bool = True
+    tool_policy: ToolPolicy | None = None
 
 
 class SSEEvent(BaseModel):
@@ -65,6 +72,12 @@ class SSEEvent(BaseModel):
     id: str = Field(default="", description="SSE event ID (for stream resumption)")
     retry: int | None = Field(default=None, description="SSE retry interval in ms")
 
+class AgentTool(BaseModel):
+    """A tool available for agent runs, as returned by GET /agent/tools."""
+
+    name: str
+    source: Literal["platform", "org", "marketplace"]
+    access_mode: Literal["included", "subscribed"]
 
 # ─── Billing ──────────────────────────────────────────────────────────────────
 
@@ -119,8 +132,9 @@ class Invoice(BaseModel):
 class CreditHistoryEntry(BaseModel):
     id: str
     amount_usdc: int
-    method: Literal["stripe", "usdc", "admin"]
-    reference: str | None = None
+    operation: Literal["debit", "topup"]
+    balance_usdc_after: int
+    reason: str | None = None
     created_at: str
 
 

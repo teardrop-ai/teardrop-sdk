@@ -318,3 +318,106 @@ class TestParseUsdc:
     def test_round_trip(self):
         original = 123_456
         assert parse_usdc(format_usdc(original)) == original
+
+
+# ─── TEXT_MESSAGE_START / TEXT_MESSAGE_END ────────────────────────────────────
+
+
+class TestTextMessageMarkers:
+    """Forward-compatibility: TEXT_MESSAGE_START and TEXT_MESSAGE_END parse correctly."""
+
+    @pytest.mark.asyncio
+    async def test_start_end_content_round_trip(self):
+        from teardrop.streaming import EVENT_TEXT_MSG_START, EVENT_TEXT_MSG_END
+
+        lines = [
+            _sse("TEXT_MESSAGE_START", {"message_id": "msg-1"}),
+            "",
+            _sse("TEXT_MESSAGE_CONTENT", {"message_id": "msg-1", "delta": "Hello"}),
+            "",
+            _sse("TEXT_MESSAGE_END", {"message_id": "msg-1"}),
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert len(events) == 3
+        assert events[0].type == EVENT_TEXT_MSG_START
+        assert events[0].data["message_id"] == "msg-1"
+        assert events[1].type == EVENT_TEXT_MSG_CONTENT
+        assert events[1].data["delta"] == "Hello"
+        assert events[2].type == EVENT_TEXT_MSG_END
+        assert events[2].data["message_id"] == "msg-1"
+
+    @pytest.mark.asyncio
+    async def test_start_event_constant_matches(self):
+        from teardrop.streaming import EVENT_TEXT_MSG_START
+
+        lines = [
+            _sse("TEXT_MESSAGE_START", {"message_id": "x"}),
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert events[0].type == EVENT_TEXT_MSG_START
+
+    @pytest.mark.asyncio
+    async def test_end_event_constant_matches(self):
+        from teardrop.streaming import EVENT_TEXT_MSG_END
+
+        lines = [
+            _sse("TEXT_MESSAGE_END", {"message_id": "x"}),
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert events[0].type == EVENT_TEXT_MSG_END
+
+
+# ─── USAGE_SUMMARY with cache tokens ──────────────────────────────────────────
+
+
+class TestUsageSummaryWithCacheTokens:
+    """Cache token fields in USAGE_SUMMARY pass through as generic data."""
+
+    @pytest.mark.asyncio
+    async def test_cache_read_tokens_in_event_data(self):
+        lines = [
+            _sse("USAGE_SUMMARY", {
+                "run_id": "run-1",
+                "tokens_in": 100,
+                "tokens_out": 50,
+                "tool_calls": 2,
+                "duration_ms": 5000,
+                "cost_usdc": 1000,
+                "platform_fee_usdc": 0,
+                "delegation_cost_usdc": 0,
+                "cache_read_tokens": 200,
+                "cache_creation_tokens": 150,
+            }),
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert len(events) == 1
+        assert events[0].type == "USAGE_SUMMARY"
+        data = events[0].data
+        assert data["cache_read_tokens"] == 200
+        assert data["cache_creation_tokens"] == 150
+        assert data["tokens_in"] == 100
+
+    @pytest.mark.asyncio
+    async def test_cache_tokens_absent_by_default(self):
+        """Legacy USAGE_SUMMARY without cache tokens should not break."""
+        lines = [
+            _sse("USAGE_SUMMARY", {
+                "run_id": "run-1",
+                "tokens_in": 100,
+                "tokens_out": 50,
+                "tool_calls": 2,
+                "duration_ms": 5000,
+                "cost_usdc": 1000,
+                "platform_fee_usdc": 0,
+                "delegation_cost_usdc": 0,
+            }),
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert len(events) == 1
+        assert "cache_read_tokens" not in events[0].data
+        assert "cache_creation_tokens" not in events[0].data

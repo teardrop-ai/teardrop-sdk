@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import time
 import uuid
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Literal
 
 import anyio
 import httpx
@@ -27,6 +27,7 @@ from teardrop.models import (
     AddTrustedAgentRequest,
     AgentCard,
     AgentRunRequest,
+    AgentTool,
     AgentWallet,
     AuthorConfig,
     BillingBalance,
@@ -59,6 +60,7 @@ from teardrop.models import (
     StripeTopupResponse,
     StripeTopupStatusResponse,
     TokenResponse,
+    ToolPolicy,
     TrustedAgent,
     UpdateMcpServerRequest,
     UpdateOrgToolRequest,
@@ -248,6 +250,7 @@ class AsyncTeardropClient:
         context: dict[str, Any] | None = None,
         payment_header: str | None = None,
         emit_ui: bool = True,
+        tool_policy: ToolPolicy | None = None,
     ) -> AsyncIterator[SSEEvent]:
         """Stream an agent run, yielding parsed SSE events.
 
@@ -256,7 +259,11 @@ class AsyncTeardropClient:
             thread_id: Optional conversation thread ID (auto-generated if omitted).
             context: Optional extra context passed to agent state metadata.
             payment_header: Pre-signed x402 payment header (for retry after 402).
-            emit_ui: Controls whether UI surface events are emitted.
+            emit_ui: Controls whether UI surface events are emitted.  Set to
+                ``False`` for CLI / M2M clients to reduce stream volume and
+                latency.
+            tool_policy: Per-run tool exclusion policy (e.g. to disable specific
+                tools like ``platform/web_search`` for this run).
         """
         http = await self._get_http()
         headers = await self._headers()
@@ -270,6 +277,7 @@ class AsyncTeardropClient:
             thread_id=thread_id or str(uuid.uuid4()),
             context=context,
             emit_ui=emit_ui,
+            tool_policy=tool_policy,
         )
         body = req.model_dump(exclude_none=True)
 
@@ -285,6 +293,20 @@ class AsyncTeardropClient:
                 self._raise_for_status(resp)
             async for event in iter_sse_events(resp):
                 yield event
+
+    async def get_agent_tools(self) -> list[AgentTool]:
+        """GET /agent/tools — list all tools available for agent runs.
+
+        Returns the tool inventory including source (platform / org / marketplace)
+        and access mode (included / subscribed) for each tool.
+        """
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/agent/tools",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return [AgentTool.model_validate(t) for t in resp.json()]
 
     # ─── Auth ─────────────────────────────────────────────────────────────
 
@@ -390,7 +412,12 @@ class AsyncTeardropClient:
     async def invite(
         self, *, email: str | None = None, role: str = "member"
     ) -> dict[str, Any]:
-        """POST /org/invite — create an org invite link."""
+        """POST /org/invite — create an org invite link.
+
+        Note: The API strictly enforces ``role: "user"`` (or its alias
+        ``"member"``) for invites.  Attempting to invite with
+        ``role="admin"`` will return a 422 validation error.
+        """
         http = await self._get_http()
         body: dict[str, Any] = {"role": role}
         if email:
@@ -454,9 +481,14 @@ class AsyncTeardropClient:
         return Invoice.model_validate(resp.json())
 
     async def get_credit_history(
-        self, *, limit: int = 20, operation: str | None = None
+        self, *, limit: int = 20, operation: Literal["debit", "topup"] | None = None
     ) -> list[CreditHistoryEntry]:
-        """GET /billing/credit-history — credit topup history."""
+        """GET /billing/credit-history — credit topup / debit history.
+
+        Args:
+            limit: Max entries to return.
+            operation: Filter by ``"debit"`` or ``"topup"`` (omit for all).
+        """
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
         if operation:
@@ -937,7 +969,11 @@ class AsyncTeardropClient:
         return data
 
     async def subscribe(self, qualified_tool_name: str) -> MarketplaceSubscription:
-        """POST /marketplace/subscriptions — subscribe to a marketplace tool."""
+        """POST /marketplace/subscriptions — subscribe to a marketplace tool.
+
+        Note: The API returns 400 for self-subscriptions (subscribing to
+        your own org's tool) and for platform-tool subscriptions.
+        """
         http = await self._get_http()
         resp = await http.post(
             f"{self._base_url}/marketplace/subscriptions",
@@ -1324,6 +1360,10 @@ class TeardropClient:
 
         self._ensure_portal()
         return self._portal.call(_collect)  # type: ignore[union-attr]
+
+    def get_agent_tools(self) -> list[AgentTool]:
+        """List all tools available for agent runs (blocking)."""
+        return self._run(self._async.get_agent_tools())
 
     def get_siwe_nonce(self) -> dict[str, str]:
         return self._run(self._async.get_siwe_nonce())

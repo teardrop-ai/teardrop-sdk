@@ -17,6 +17,7 @@ from teardrop.models import (
     AddTrustedAgentRequest,
     AgentCard,
     AgentRunRequest,
+    AgentTool,
     AgentWallet,
     AuthorConfig,
     BillingBalance,
@@ -58,6 +59,7 @@ from teardrop.models import (
     StripeTopupResponse,
     StripeTopupStatusResponse,
     TokenResponse,
+    ToolPolicy,
     ToolPricing,
     TrustedAgent,
     UpdateMcpServerRequest,
@@ -101,9 +103,11 @@ __all__ = [
     # Models - agent
     "AgentCard",
     "AgentRunRequest",
+    "AgentTool",
     "JwtPayloadBase",
     "MeResponse",
     "SSEEvent",
+    "ToolPolicy",
     # Models - billing
     "BillingBalance",
     "BillingHistoryEntry",

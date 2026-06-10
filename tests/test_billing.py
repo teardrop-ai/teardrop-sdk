@@ -106,9 +106,9 @@ class TestGetInvoice:
 class TestGetCreditHistoryOperation:
     async def test_operation_param_forwarded(self, client, mock_http):
         mock_http.get.return_value = _json_response([])
-        await client.get_credit_history(operation="stripe")
+        await client.get_credit_history(operation="topup")
         _, kwargs = mock_http.get.call_args
-        assert kwargs["params"]["operation"] == "stripe"
+        assert kwargs["params"]["operation"] == "topup"
 
     async def test_no_operation_omits_param(self, client, mock_http):
         mock_http.get.return_value = _json_response([])

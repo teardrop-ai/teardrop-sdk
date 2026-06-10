@@ -339,8 +339,9 @@ class TestGetCreditHistory:
         entry = {
             "id": "ch-1",
             "amount_usdc": 1000,
-            "method": "stripe",
-            "reference": None,
+            "operation": "topup",
+            "balance_usdc_after": 500_000,
+            "reason": None,
             "created_at": "2026-01-01T00:00:00Z",
         }
         response_data = [entry]
@@ -354,7 +355,8 @@ class TestGetCreditHistory:
                 result = await client.get_credit_history()
 
         assert isinstance(result[0], CreditHistoryEntry)
-        assert result[0].method == "stripe"
+        assert result[0].operation == "topup"
+        assert result[0].balance_usdc_after == 500_000
 
 
 class TestTopupStripe:
@@ -528,3 +530,87 @@ class TestTransportErrors:
         with pytest.raises(TeardropError, match="Connection failed"):
             from teardrop.models import StoreMemoryRequest
             await client.create_memory(StoreMemoryRequest(content="test"))
+
+
+class TestGetAgentTools:
+    """Tests for client.get_agent_tools()."""
+
+    @pytest.mark.asyncio
+    async def test_returns_list_of_agent_tools(self, client, mock_http):
+        mock_http.get.return_value = _json_response([
+            {"name": "platform/web_search", "source": "platform", "access_mode": "included"},
+            {"name": "acme/my_tool", "source": "marketplace", "access_mode": "subscribed"},
+        ])
+        result = await client.get_agent_tools()
+        assert len(result) == 2
+        assert result[0].name == "platform/web_search"
+        assert result[0].source == "platform"
+        assert result[0].access_mode == "included"
+        assert result[1].source == "marketplace"
+        assert result[1].access_mode == "subscribed"
+
+    @pytest.mark.asyncio
+    async def test_hits_agent_tools_endpoint(self, client, mock_http):
+        mock_http.get.return_value = _json_response([])
+        await client.get_agent_tools()
+        args, kwargs = mock_http.get.call_args
+        assert args[0] == "http://test/agent/tools"
+        assert "headers" in kwargs
+
+    @pytest.mark.asyncio
+    async def test_empty_list(self, client, mock_http):
+        mock_http.get.return_value = _json_response([])
+        result = await client.get_agent_tools()
+        assert result == []
+
+
+class TestRunWithToolPolicy:
+    """Tests that tool_policy is serialized into the agent run request."""
+
+    @pytest.mark.asyncio
+    async def test_tool_policy_included_in_body(self, client, mock_http):
+        from teardrop.models import ToolPolicy
+
+        async def _aiter_lines():
+            yield 'data: {"event": "DONE", "data": {}}'
+            yield ""
+
+        mock_resp = MagicMock()
+        mock_resp.is_success = True
+        mock_resp.aiter_lines = _aiter_lines
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+        mock_http.stream = MagicMock(return_value=mock_resp)
+
+        policy = ToolPolicy(exclude_names=["platform/web_search"])
+        events = []
+        async for event in client.run("hello", tool_policy=policy):
+            events.append(event)
+
+        _, kwargs = mock_http.stream.call_args
+        body = kwargs["json"]
+        assert body["tool_policy"] == {"exclude_names": ["platform/web_search"]}
+
+    @pytest.mark.asyncio
+    async def test_tool_policy_omitted_when_none(self, client, mock_http):
+        """When tool_policy is None, exclude_none should leave it out of the body."""
+
+        async def _aiter_lines():
+            yield 'data: {"event": "DONE", "data": {}}'
+            yield ""
+
+        mock_resp = MagicMock()
+        mock_resp.is_success = True
+        mock_resp.aiter_lines = _aiter_lines
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+        mock_http.stream = MagicMock(return_value=mock_resp)
+
+        events = []
+        async for event in client.run("hello"):
+            events.append(event)
+
+        _, kwargs = mock_http.stream.call_args
+        assert "tool_policy" not in kwargs["json"]

@@ -103,6 +103,28 @@ me = await client.get_me()
 # → JwtPayloadBase(sub=..., org_id=..., role="member", auth_method="email", ...)
 ```
 
+### Organization Management
+
+```python
+# Create an invite link (role must be "member" or "user")
+invite = await client.invite(email="colleague@example.com", role="member")
+print(f"Invite URL: {invite['invite_url']}")
+```
+
+*Note: Attempting to invite with `role="admin"` will return a 422 error from the API.*
+
+### Live Tool Discovery
+
+List all tools available to the current agent, including their source and access status.
+
+```python
+tools = await client.get_agent_tools()
+for tool in tools:
+    # source: "platform" | "org" | "marketplace"
+    # access_mode: "included" | "subscribed"
+    print(f"{tool.name} ({tool.source}): {tool.access_mode}")
+```
+
 ---
 
 ## Marketplace
@@ -274,11 +296,25 @@ async for event in client.run(
     "Summarise the top DeFi news today",
     thread_id="conv-abc123",          # optional; uuid generated if omitted
     model="claude-opus-4-5",          # optional LLM override
+    emit_ui=True,                     # set to False to disable SURFACE_UPDATE events
+    tool_policy={"exclude_names": ["platform/web_search"]}, # dynamically disable tools
 ):
     print(event.type, event.data)
 ```
 
 `run()` is an async generator that yields `SSEEvent` objects. The sync equivalent `run_sync()` blocks and returns `list[SSEEvent]`.
+
+### Dynamic Guardrails (`tool_policy`)
+
+You can dynamically restrict an agent's tools on a per-request basis. This is useful for blocking internet access or high-cost tools for specific user segments without changing the agent's global configuration.
+
+```python
+from teardrop import ToolPolicy
+
+policy = ToolPolicy(exclude_names=["platform/web_search", "acme/internal_crm"])
+async for event in client.run("Hello!", tool_policy=policy):
+    ...
+```
 
 **Available Tools**: The agent automatically discovers and can call:
 - Built-in Teardrop tools
@@ -439,7 +475,16 @@ invoice = await client.get_invoice(run_id)
 ### Credit History
 
 ```python
-entries: list[CreditHistoryEntry] = await client.get_credit_history(operation="topup")
+# Filter by "topup" or "debit"
+entries = await client.get_credit_history(operation="debit", limit=50)
+
+for entry in entries:
+    # operation: "debit" | "topup"
+    # balance_usdc_after: current balance after this transaction
+    # reason: human-readable explanation (e.g., "Agent run run-123")
+    print(f"{entry.operation}: {entry.amount_usdc} (Balance: {entry.balance_usdc_after})")
+    if entry.reason:
+        print(f"  Reason: {entry.reason}")
 ```
 
 ### Stripe Top-up
@@ -481,6 +526,10 @@ summary = await client.get_usage(start="2026-04-01", end="2026-04-30")
 # → UsageSummary(total_runs=..., total_tokens_in=..., total_tokens_out=...,
 #                total_tool_calls=..., total_duration_ms=...)
 ```
+
+Usage events in the `client.run()` stream also include cache performance metrics:
+- `cache_read_tokens`: Input tokens served from cache (cheaper/faster).
+- `cache_creation_tokens`: Tokens written to the cache for future use.
 
 ---
 
