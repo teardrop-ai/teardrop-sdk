@@ -79,6 +79,13 @@ class AgentTool(BaseModel):
     source: Literal["platform", "org", "marketplace"]
     access_mode: Literal["included", "subscribed"]
 
+
+class AgentToolsResponse(BaseModel):
+    """Envelope response from GET /agent/tools."""
+
+    tools: list[AgentTool] = Field(default_factory=list)
+
+
 # ─── Billing ──────────────────────────────────────────────────────────────────
 
 

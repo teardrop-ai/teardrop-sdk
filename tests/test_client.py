@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from teardrop.client import AsyncTeardropClient
+from teardrop.client import AsyncTeardropClient, _parse_list_response
 from teardrop.exceptions import (
     APIError,
     AuthenticationError,
@@ -21,9 +21,15 @@ from teardrop.exceptions import (
 from teardrop.models import (
     AgentCard,
     BillingBalance,
+    BillingHistoryEntry,
     BillingPricingResponse,
     CreditHistoryEntry,
     Invoice,
+    MarketplaceSubscription,
+    MarketplaceTool,
+    OrgMcpServer,
+    OrgTool,
+    TrustedAgent,
     UsageSummary,
     Wallet,
 )
@@ -318,7 +324,7 @@ class TestGetInvoices:
             "breakdown": [],
             "settled_at": "2026-01-01T00:00:00Z",
         }
-        response_data = [invoice_item]
+        response_data = {"items": [invoice_item], "next_cursor": None}
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(response_data))
@@ -537,10 +543,12 @@ class TestGetAgentTools:
 
     @pytest.mark.asyncio
     async def test_returns_list_of_agent_tools(self, client, mock_http):
-        mock_http.get.return_value = _json_response([
-            {"name": "platform/web_search", "source": "platform", "access_mode": "included"},
-            {"name": "acme/my_tool", "source": "marketplace", "access_mode": "subscribed"},
-        ])
+        mock_http.get.return_value = _json_response({
+            "tools": [
+                {"name": "platform/web_search", "source": "platform", "access_mode": "included"},
+                {"name": "acme/my_tool", "source": "marketplace", "access_mode": "subscribed"},
+            ]
+        })
         result = await client.get_agent_tools()
         assert len(result) == 2
         assert result[0].name == "platform/web_search"
@@ -551,7 +559,7 @@ class TestGetAgentTools:
 
     @pytest.mark.asyncio
     async def test_hits_agent_tools_endpoint(self, client, mock_http):
-        mock_http.get.return_value = _json_response([])
+        mock_http.get.return_value = _json_response({"tools": []})
         await client.get_agent_tools()
         args, kwargs = mock_http.get.call_args
         assert args[0] == "http://test/agent/tools"
@@ -559,7 +567,7 @@ class TestGetAgentTools:
 
     @pytest.mark.asyncio
     async def test_empty_list(self, client, mock_http):
-        mock_http.get.return_value = _json_response([])
+        mock_http.get.return_value = _json_response({"tools": []})
         result = await client.get_agent_tools()
         assert result == []
 
@@ -614,3 +622,65 @@ class TestRunWithToolPolicy:
 
         _, kwargs = mock_http.stream.call_args
         assert "tool_policy" not in kwargs["json"]
+
+
+class TestParseListResponse:
+    """Tests for the _parse_list_response private helper."""
+
+    def test_bare_array(self):
+        from teardrop.models import BillingHistoryEntry
+
+        data = [
+            {"run_id": "r-1", "user_id": "u-1", "amount_usdc": 100, "method": "credit", "status": "settled", "created_at": "2026-01-01T00:00:00Z"},
+        ]
+        result = _parse_list_response(data, BillingHistoryEntry)
+        assert len(result) == 1
+        assert result[0].run_id == "r-1"
+
+    def test_envelope_items(self):
+        from teardrop.models import BillingHistoryEntry
+
+        data = {
+            "items": [
+                {"run_id": "r-1", "user_id": "u-1", "amount_usdc": 100, "method": "credit", "status": "settled", "created_at": "2026-01-01T00:00:00Z"},
+            ],
+            "next_cursor": None,
+        }
+        result = _parse_list_response(data, BillingHistoryEntry, item_container="items")
+        assert len(result) == 1
+        assert result[0].run_id == "r-1"
+
+    def test_envelope_tools(self):
+        from teardrop.models import AgentTool
+
+        data = {"tools": [{"name": "t1", "source": "platform", "access_mode": "included"}]}
+        result = _parse_list_response(data, AgentTool, item_container="tools")
+        assert len(result) == 1
+        assert result[0].name == "t1"
+
+    def test_empty_bare_array(self):
+        result = _parse_list_response([], BillingHistoryEntry)
+        assert result == []
+
+    def test_empty_envelope(self):
+        result = _parse_list_response({"items": []}, BillingHistoryEntry, item_container="items")
+        assert result == []
+
+    def test_missing_field_in_envelope(self):
+        result = _parse_list_response({"other": []}, BillingHistoryEntry, item_container="items")
+        assert result == []
+
+    def test_envelope_auto_keys(self):
+        from teardrop.models import AgentTool
+
+        data = {"tools": [{"name": "t1", "source": "platform", "access_mode": "included"}]}
+        result = _parse_list_response(data, AgentTool)
+        assert len(result) == 1
+        assert result[0].name == "t1"
+
+    def test_non_dict_non_list(self):
+        import pytest
+        from pydantic_core import ValidationError
+
+        with pytest.raises(ValidationError):
+            _parse_list_response("not a list", BillingHistoryEntry)

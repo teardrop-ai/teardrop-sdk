@@ -5,10 +5,11 @@ from __future__ import annotations
 import contextlib
 import time
 import uuid
-from typing import Any, AsyncIterator, Literal
+from typing import Any, AsyncIterator, Literal, TypeVar
 
 import anyio
 import httpx
+from pydantic import BaseModel
 
 from teardrop.auth import TokenManager
 from teardrop.exceptions import (
@@ -24,10 +25,12 @@ from teardrop.exceptions import (
     ValidationError,
 )
 from teardrop.models import (
+    MODELS_BY_PROVIDER,
     AddTrustedAgentRequest,
     AgentCard,
     AgentRunRequest,
     AgentTool,
+    AgentToolsResponse,
     AgentWallet,
     AuthorConfig,
     BillingBalance,
@@ -41,20 +44,16 @@ from teardrop.models import (
     Invoice,
     JwtPayloadBase,
     LinkWalletRequest,
-    MODELS_BY_PROVIDER,
     MarketplaceSubscription,
     MarketplaceTool,
-    MeResponse,
     MemoryEntry,
+    MeResponse,
     ModelBenchmarksResponse,
-    OrgCredentialsEntry,
-    OrgCredentialsResponse,
     OrgLlmConfig,
     OrgMcpServer,
     OrgTool,
-    RegenerateCredentialsResponse,
-    SSEEvent,
     SetLlmConfigRequest,
+    SSEEvent,
     StoreMemoryRequest,
     StripeTopupRequest,
     StripeTopupResponse,
@@ -64,9 +63,9 @@ from teardrop.models import (
     TrustedAgent,
     UpdateMcpServerRequest,
     UpdateOrgToolRequest,
+    UsageSummary,
     UsdcTopupRequest,
     UsdcTopupRequirements,
-    UsageSummary,
     Wallet,
     WithdrawRequest,
 )
@@ -87,6 +86,36 @@ _AGENT_CARD_MAX_BYTES: int = 65_536
 _LLM_CONFIG_TTL: int = 300
 # Seconds before a cached public model benchmarks response is considered stale.
 _MODEL_BENCHMARKS_TTL: int = 600
+
+# ─── Private helpers ──────────────────────────────────────────────────────────
+
+
+_T = TypeVar("_T", bound=BaseModel)
+
+
+def _parse_list_response(
+    data: Any,
+    item_model: type[_T],
+    item_container: str | None = None,
+) -> list[_T]:
+    """Parse a list response supporting both bare-array and envelope shapes.
+
+    If *data* is a dict and *item_container* is provided, the items are read
+    from ``data[item_container]``.  If *item_container* is ``None`` the helper
+    falls back to known envelope keys (items, tools, subscriptions, ...).
+    """
+    _ENVELOPE_KEYS = ["items", "tools", "subscriptions", "mcp_servers", "servers", "earnings"]
+    if isinstance(data, dict):
+        if item_container is not None:
+            items = data.get(item_container, [])
+        else:
+            items = []
+            for key in _ENVELOPE_KEYS:
+                if key in data:
+                    items = data[key]
+                    break
+        return [item_model.model_validate(x) for x in items]
+    return [item_model.model_validate(x) for x in data]
 
 
 class _HttpProxy:
@@ -306,7 +335,7 @@ class AsyncTeardropClient:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return [AgentTool.model_validate(t) for t in resp.json()]
+        return AgentToolsResponse.model_validate(resp.json()).tools
 
     # ─── Auth ─────────────────────────────────────────────────────────────
 
@@ -456,7 +485,7 @@ class AsyncTeardropClient:
             params=params,
         )
         self._raise_for_status(resp)
-        return [BillingHistoryEntry.model_validate(i) for i in resp.json()]
+        return _parse_list_response(resp.json(), BillingHistoryEntry)
 
     async def get_invoices(self, *, limit: int = 20) -> list[Invoice]:
         """GET /billing/invoices — invoice list."""
@@ -468,7 +497,7 @@ class AsyncTeardropClient:
             params=params,
         )
         self._raise_for_status(resp)
-        return [Invoice.model_validate(i) for i in resp.json()]
+        return _parse_list_response(resp.json(), Invoice, item_container="items")
 
     async def get_invoice(self, run_id: str) -> Invoice:
         """GET /billing/invoice/{run_id} — single run invoice."""
@@ -499,9 +528,7 @@ class AsyncTeardropClient:
             params=params,
         )
         self._raise_for_status(resp)
-        data = resp.json()
-        items = data["items"] if isinstance(data, dict) and "items" in data else data
-        return [CreditHistoryEntry.model_validate(i) for i in items]
+        return _parse_list_response(resp.json(), CreditHistoryEntry, item_container="items")
 
     async def topup_stripe(self, request: StripeTopupRequest) -> StripeTopupResponse:
         """POST /billing/topup/stripe — start a Stripe checkout session."""
@@ -596,7 +623,7 @@ class AsyncTeardropClient:
         http = await self._get_http()
         resp = await http.get(f"{self._base_url}/wallets/me", headers=await self._headers())
         self._raise_for_status(resp)
-        return [Wallet.model_validate(w) for w in resp.json()]
+        return _parse_list_response(resp.json(), Wallet)
 
     async def delete_wallet(self, wallet_id: str) -> None:
         """DELETE /wallets/{wallet_id} — unlink a wallet."""
@@ -682,12 +709,7 @@ class AsyncTeardropClient:
         http = await self._get_http()
         resp = await http.get(f"{self._base_url}/tools", headers=await self._headers())
         self._raise_for_status(resp)
-        data = resp.json()
-        if isinstance(data, dict):
-            items = data.get("items") or data.get("tools") or []
-        else:
-            items = data
-        return [OrgTool.model_validate(t) for t in items]
+        return _parse_list_response(resp.json(), OrgTool, item_container="items")
 
     async def get_tool(self, tool_id: str) -> OrgTool:
         """GET /tools/{tool_id} — fetch a single tool by ID."""
@@ -738,12 +760,7 @@ class AsyncTeardropClient:
         http = await self._get_http()
         resp = await http.get(f"{self._base_url}/mcp/servers", headers=await self._headers())
         self._raise_for_status(resp)
-        data = resp.json()
-        if isinstance(data, dict):
-            items = data.get("items") or data.get("mcp_servers") or data.get("servers") or []
-        else:
-            items = data
-        return [OrgMcpServer.model_validate(s) for s in items]
+        return _parse_list_response(resp.json(), OrgMcpServer, item_container="items")
 
     async def get_mcp_server(self, server_id: str) -> OrgMcpServer:
         """GET /mcp/servers/{server_id} — fetch a single MCP server by ID."""
@@ -867,7 +884,7 @@ class AsyncTeardropClient:
         resp = await http.get(f"{self._base_url}/marketplace/catalog", params=params)
         self._raise_for_status(resp)
         data = resp.json()
-        data["tools"] = [MarketplaceTool.model_validate(t) for t in data.get("tools", [])]
+        data["tools"] = _parse_list_response(data, MarketplaceTool, item_container="tools")
         return data
 
     async def set_author_config(self, settlement_wallet: str) -> AuthorConfig:
@@ -925,9 +942,8 @@ class AsyncTeardropClient:
         self._raise_for_status(resp)
         data = resp.json()
         if isinstance(data, list):
-            # Handle legacy flat-array response shape
-            return {"earnings": [EarningsEntry.model_validate(e) for e in data], "next_cursor": None}
-        data["earnings"] = [EarningsEntry.model_validate(e) for e in data.get("earnings", [])]
+            return {"earnings": _parse_list_response(data, EarningsEntry), "next_cursor": None}
+        data["earnings"] = _parse_list_response(data, EarningsEntry, item_container="earnings")
         return data
 
     async def withdraw(self, request: WithdrawRequest) -> dict[str, Any]:
@@ -991,9 +1007,7 @@ class AsyncTeardropClient:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        data = resp.json()
-        items = data["subscriptions"] if isinstance(data, dict) and "subscriptions" in data else data
-        return [MarketplaceSubscription.model_validate(s) for s in items]
+        return _parse_list_response(resp.json(), MarketplaceSubscription, item_container="subscriptions")
 
     async def unsubscribe(self, subscription_id: str) -> None:
         """DELETE /marketplace/subscriptions/{id} — unsubscribe."""
@@ -1220,7 +1234,7 @@ class AsyncTeardropClient:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return [TrustedAgent.model_validate(a) for a in resp.json()]
+        return _parse_list_response(resp.json(), TrustedAgent)
 
     async def remove_trusted_agent(self, agent_id: str) -> None:
         """DELETE /a2a/agents/{agent_id} — remove a trusted agent."""
