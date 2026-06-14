@@ -382,6 +382,7 @@ class MarketplaceTool(BaseModel):
     cost_usdc: int = 0
     author: str = ""  # author org display name (e.g. "Teardrop" for platform tools)
     author_slug: str = ""  # author org slug (e.g. "platform" for Teardrop built-in tools)
+    tool_type: str = ""  # backend-supplied tool type tag (e.g. "webhook", "mcp", "platform")
 
 
 class AuthorConfig(BaseModel):

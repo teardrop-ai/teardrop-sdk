@@ -43,6 +43,7 @@ _TOOL = {
     "cost_usdc": 100,
     "author": "Acme",
     "author_slug": "acme",
+    "tool_type": "webhook",
 }
 
 _AUTHOR_CONFIG = {
@@ -83,6 +84,7 @@ class TestGetMarketplaceCatalog:
         result = await client.get_marketplace_catalog()
         assert isinstance(result["tools"][0], MarketplaceTool)
         assert result["tools"][0].name == "acme/search"
+        assert result["tools"][0].tool_type == "webhook"
         assert len(result["tools"]) == 2
 
     async def test_no_auth_header_sent(self, client, mock_http):
