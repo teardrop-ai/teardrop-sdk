@@ -12,7 +12,6 @@ from teardrop.models import AgentWallet, LinkWalletRequest, Wallet
 
 from .conftest import _json_response
 
-
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
 

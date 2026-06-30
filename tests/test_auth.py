@@ -138,6 +138,7 @@ class TestFetchTokenClientCredentials:
     async def test_client_credentials_path(self):
         """_fetch_token should send client_id/client_secret when those are set."""
         import time as _time
+
         new_token = _make_jwt(exp=_time.time() + 3600)
         client = _FakeClient(
             _FakeHTTPResponse(
@@ -154,6 +155,7 @@ class TestFetchTokenClientCredentials:
     async def test_refresh_token_stored_when_present(self):
         """When the token response contains a refresh_token it must be stored."""
         import time as _time
+
         new_token = _make_jwt(exp=_time.time() + 3600)
         client = _FakeClient(
             _FakeHTTPResponse(

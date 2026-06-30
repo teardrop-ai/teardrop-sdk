@@ -68,7 +68,9 @@ def _cached_token(integration_url: str) -> str:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def async_client(integration_url: str, _cached_token: str) -> AsyncGenerator[AsyncTeardropClient, None]:  # type: ignore[misc]
+async def async_client(
+    integration_url: str, _cached_token: str
+) -> AsyncGenerator[AsyncTeardropClient, None]:  # type: ignore[misc]
     """A real AsyncTeardropClient using the session-cached token."""
     client = AsyncTeardropClient(integration_url, token=_cached_token)
     yield client

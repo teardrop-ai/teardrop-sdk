@@ -56,9 +56,7 @@ class TestToolRoundTrip:
 
 
 class TestMcpServerRoundTrip:
-    async def test_create_and_delete_mcp_server(
-        self, async_client: AsyncTeardropClient
-    ) -> None:
+    async def test_create_and_delete_mcp_server(self, async_client: AsyncTeardropClient) -> None:
         server: OrgMcpServer | None = None
         name = f"smokemcp_{uuid.uuid4().hex[:8]}"
         try:

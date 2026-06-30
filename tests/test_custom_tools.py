@@ -10,10 +10,13 @@ import pytest
 
 from teardrop.client import AsyncTeardropClient
 from teardrop.exceptions import APIError
-from teardrop.models import CreateOrgToolRequest, OrgTool, UpdateOrgToolRequest
 
 # Backward-compat aliases still importable
-from teardrop.models import CreateCustomToolRequest, CustomTool
+from teardrop.models import (
+    CreateOrgToolRequest,
+    OrgTool,
+    UpdateOrgToolRequest,
+)
 
 
 def _json_response(
@@ -120,9 +123,7 @@ class TestGetTool:
 
     @pytest.mark.asyncio
     async def test_404_raises_api_error(self, client, mock_http):
-        mock_http.get = AsyncMock(
-            return_value=_json_response({"detail": "Not found"}, status=404)
-        )
+        mock_http.get = AsyncMock(return_value=_json_response({"detail": "Not found"}, status=404))
         with pytest.raises(APIError):
             await client.get_tool("missing")
 

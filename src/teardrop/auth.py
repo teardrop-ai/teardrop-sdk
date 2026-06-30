@@ -55,9 +55,7 @@ class TokenManager:
     @property
     def can_refresh(self) -> bool:
         """Whether this manager has credentials to request a new token."""
-        return bool(self._email and self._secret) or bool(
-            self._client_id and self._client_secret
-        )
+        return bool(self._email and self._secret) or bool(self._client_id and self._client_secret)
 
     async def get_token(self, client: httpx.AsyncClient) -> str:
         """Return a valid token, refreshing if expired or about to expire."""

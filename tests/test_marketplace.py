@@ -18,7 +18,6 @@ from teardrop.models import (
 
 from .conftest import _json_response
 
-
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
 
@@ -78,9 +77,7 @@ _SUBSCRIPTION = {
 
 class TestGetMarketplaceCatalog:
     async def test_returns_parsed_marketplace_tools(self, client, mock_http):
-        mock_http.get.return_value = _json_response(
-            {"tools": [_TOOL, _TOOL], "next_cursor": None}
-        )
+        mock_http.get.return_value = _json_response({"tools": [_TOOL, _TOOL], "next_cursor": None})
         result = await client.get_marketplace_catalog()
         assert isinstance(result["tools"][0], MarketplaceTool)
         assert result["tools"][0].name == "acme/search"
@@ -169,9 +166,7 @@ class TestGetMarketplaceBalance:
 
 class TestGetEarnings:
     async def test_paginated_response(self, client, mock_http):
-        mock_http.get.return_value = _json_response(
-            {"earnings": [_EARNINGS], "next_cursor": "xyz"}
-        )
+        mock_http.get.return_value = _json_response({"earnings": [_EARNINGS], "next_cursor": "xyz"})
         result = await client.get_earnings()
         assert isinstance(result["earnings"][0], EarningsEntry)
         assert result["next_cursor"] == "xyz"

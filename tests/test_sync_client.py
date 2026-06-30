@@ -8,7 +8,16 @@ from unittest.mock import AsyncMock, patch
 import httpx
 
 from teardrop.client import TeardropClient
-from teardrop.models import BillingBalance, SSEEvent
+from teardrop.models import (
+    BillingBalance,
+    CreateEventTriggerRequest,
+    CreateScheduleRequest,
+    EventTriggerWithSecret,
+    ScheduledRun,
+    ScheduledRunResult,
+    ScheduledRunsPage,
+    SSEEvent,
+)
 
 
 class TestTeardropClientContextManager:
@@ -119,6 +128,139 @@ class TestSyncDelegation:
                 )
 
         assert result.session_id == "sess_x"
+
+    def test_schedules_namespace_delegates(self):
+        schedule = ScheduledRun(
+            id="sched-1",
+            org_id="org-1",
+            user_id="user-1",
+            name="Daily Summary",
+            prompt="Summarize balances",
+            schedule_kind="interval",
+            interval_seconds=86400,
+            enabled=True,
+        )
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with patch.object(
+                client._async.schedules,
+                "create",
+                new=AsyncMock(return_value=schedule),
+            ):
+                result = client.schedules.create(
+                    CreateScheduleRequest(
+                        name="Daily Summary",
+                        prompt="Summarize balances",
+                        interval_seconds=86400,
+                    )
+                )
+
+        assert result.id == "sched-1"
+
+    def test_event_triggers_namespace_delegates(self):
+        trigger = EventTriggerWithSecret(
+            id="evt-1",
+            org_id="org-1",
+            user_id="user-1",
+            name="On Payment",
+            prompt="Audit {{event_json}}",
+            schedule_kind="event",
+            enabled=True,
+            trigger_token="tok-1",
+            event_path="/agent/events/tok-1",
+            secret="secret-1",
+        )
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with patch.object(
+                client._async.event_triggers,
+                "create",
+                new=AsyncMock(return_value=trigger),
+            ):
+                result = client.event_triggers.create(
+                    CreateEventTriggerRequest(
+                        name="On Payment",
+                        prompt="Audit {{event_json}}",
+                    )
+                )
+
+        assert result.secret == "secret-1"
+
+    def test_schedules_runs_iter_auto_paginates(self):
+        page_1 = ScheduledRunsPage(
+            items=[
+                ScheduledRunResult(
+                    id="run-1",
+                    schedule_id="sched-1",
+                    org_id="org-1",
+                    run_id="core-run-1",
+                    status="completed",
+                )
+            ],
+            next_cursor="page-2",
+        )
+        page_2 = ScheduledRunsPage(
+            items=[
+                ScheduledRunResult(
+                    id="run-2",
+                    schedule_id="sched-1",
+                    org_id="org-1",
+                    run_id="core-run-2",
+                    status="completed",
+                )
+            ],
+            next_cursor=None,
+        )
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with patch.object(
+                client._async.schedules,
+                "runs",
+                new=AsyncMock(side_effect=[page_1, page_2]),
+            ) as runs_mock:
+                result = list(client.schedules.runs_iter("sched-1", limit=1))
+
+        assert [item.id for item in result] == ["run-1", "run-2"]
+        assert runs_mock.call_args_list[0].kwargs == {"limit": 1, "cursor": None}
+        assert runs_mock.call_args_list[1].kwargs == {"limit": 1, "cursor": "page-2"}
+
+    def test_event_triggers_runs_iter_auto_paginates(self):
+        page_1 = ScheduledRunsPage(
+            items=[
+                ScheduledRunResult(
+                    id="run-1",
+                    schedule_id="evt-1",
+                    org_id="org-1",
+                    run_id="event-run-1",
+                    status="completed",
+                )
+            ],
+            next_cursor="page-2",
+        )
+        page_2 = ScheduledRunsPage(
+            items=[
+                ScheduledRunResult(
+                    id="run-2",
+                    schedule_id="evt-1",
+                    org_id="org-1",
+                    run_id="event-run-2",
+                    status="completed",
+                )
+            ],
+            next_cursor=None,
+        )
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with patch.object(
+                client._async.event_triggers,
+                "runs",
+                new=AsyncMock(side_effect=[page_1, page_2]),
+            ) as runs_mock:
+                result = list(client.event_triggers.runs_iter("evt-1", limit=1))
+
+        assert [item.id for item in result] == ["run-1", "run-2"]
+        assert runs_mock.call_args_list[0].kwargs == {"limit": 1, "cursor": None}
+        assert runs_mock.call_args_list[1].kwargs == {"limit": 1, "cursor": "page-2"}
 
 
 class TestSyncFromAgentCard:

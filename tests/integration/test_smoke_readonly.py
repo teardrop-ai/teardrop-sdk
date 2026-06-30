@@ -12,8 +12,6 @@ are not set (handled by tests/integration/conftest.py).
 
 from __future__ import annotations
 
-import pytest
-
 from teardrop.client import AsyncTeardropClient
 from teardrop.exceptions import APIError, NotFoundError
 from teardrop.models import (
@@ -23,7 +21,6 @@ from teardrop.models import (
     ModelBenchmarksResponse,
     UsageSummary,
 )
-
 
 # ─── Tier 1: public endpoints, no auth ───────────────────────────────────────
 

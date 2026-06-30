@@ -12,7 +12,6 @@ from teardrop.models import TokenResponse
 
 from .conftest import _json_response, _make_jwt
 
-
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
 
@@ -121,13 +120,9 @@ class TestRegisterInvite:
         assert client._token_manager._refresh_token == "rt-abc"
 
     async def test_422_raises_validation_error(self, client, mock_http):
-        mock_http.post.return_value = _json_response(
-            {"detail": "Invalid token"}, status=422
-        )
+        mock_http.post.return_value = _json_response({"detail": "Invalid token"}, status=422)
         with pytest.raises(ValidationError):
-            await client.register_invite(
-                token="bad-tok", email="u@acme.com", password="s3cr3t"
-            )
+            await client.register_invite(token="bad-tok", email="u@acme.com", password="s3cr3t")
 
 
 # ─── refresh ──────────────────────────────────────────────────────────────────

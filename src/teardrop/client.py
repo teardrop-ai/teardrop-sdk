@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import time
 import uuid
-from typing import Any, AsyncIterator, Literal, TypeVar
+from typing import Any, AsyncIterator, Iterator, Literal, TypeVar
 
 import anyio
 import httpx
@@ -36,11 +36,15 @@ from teardrop.models import (
     BillingBalance,
     BillingHistoryEntry,
     BillingPricingResponse,
+    CreateEventTriggerRequest,
     CreateMcpServerRequest,
     CreateOrgToolRequest,
+    CreateScheduleRequest,
     CreditHistoryEntry,
     DiscoverMcpToolsResponse,
     EarningsEntry,
+    EventTrigger,
+    EventTriggerWithSecret,
     Invoice,
     JwtPayloadBase,
     LinkWalletRequest,
@@ -52,6 +56,9 @@ from teardrop.models import (
     OrgLlmConfig,
     OrgMcpServer,
     OrgTool,
+    ScheduledRun,
+    ScheduledRunResult,
+    ScheduledRunsPage,
     SetLlmConfigRequest,
     SSEEvent,
     StoreMemoryRequest,
@@ -61,8 +68,10 @@ from teardrop.models import (
     TokenResponse,
     ToolPolicy,
     TrustedAgent,
+    UpdateEventTriggerRequest,
     UpdateMcpServerRequest,
     UpdateOrgToolRequest,
+    UpdateScheduleRequest,
     UsageSummary,
     UsdcTopupRequest,
     UsdcTopupRequirements,
@@ -118,6 +127,20 @@ def _parse_list_response(
     return [item_model.model_validate(x) for x in data]
 
 
+def _parse_scheduled_runs_page(data: Any) -> ScheduledRunsPage:
+    if isinstance(data, list):
+        return ScheduledRunsPage(
+            items=[ScheduledRunResult.model_validate(item) for item in data],
+            next_cursor=None,
+        )
+    items = data.get("items", []) if isinstance(data, dict) else []
+    next_cursor = data.get("next_cursor") if isinstance(data, dict) else None
+    return ScheduledRunsPage(
+        items=[ScheduledRunResult.model_validate(item) for item in items],
+        next_cursor=next_cursor,
+    )
+
+
 class _HttpProxy:
     """Wraps ``httpx.AsyncClient`` to translate transport errors into ``TeardropError``.
 
@@ -161,9 +184,7 @@ class _HttpProxy:
         return await self._call("delete", url, **kw)
 
     @contextlib.asynccontextmanager
-    async def stream(
-        self, method: str, url: str, **kw: Any
-    ) -> AsyncIterator[httpx.Response]:
+    async def stream(self, method: str, url: str, **kw: Any) -> AsyncIterator[httpx.Response]:
         try:
             async with self._c.stream(method, url, **kw) as resp:
                 yield resp
@@ -171,6 +192,191 @@ class _HttpProxy:
             raise TeardropError(f"Connection failed: {exc}") from exc
         except httpx.TimeoutException as exc:
             raise TeardropError(f"Request timed out: {exc}") from exc
+
+
+class SchedulesModule:
+    def __init__(self, client: AsyncTeardropClient) -> None:
+        self._c = client
+
+    async def create(self, request: CreateScheduleRequest) -> ScheduledRun:
+        http = await self._c._get_http()
+        resp = await http.post(
+            f"{self._c._base_url}/agent/schedules",
+            json=request.model_dump(exclude_none=True),
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        return ScheduledRun.model_validate(resp.json())
+
+    async def list(self) -> list[ScheduledRun]:
+        http = await self._c._get_http()
+        resp = await http.get(
+            f"{self._c._base_url}/agent/schedules",
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        return _parse_list_response(resp.json(), ScheduledRun)
+
+    async def get(self, schedule_id: str) -> ScheduledRun:
+        http = await self._c._get_http()
+        resp = await http.get(
+            f"{self._c._base_url}/agent/schedules/{schedule_id}",
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        return ScheduledRun.model_validate(resp.json())
+
+    async def update(self, schedule_id: str, request: UpdateScheduleRequest) -> ScheduledRun:
+        http = await self._c._get_http()
+        resp = await http.patch(
+            f"{self._c._base_url}/agent/schedules/{schedule_id}",
+            json=request.model_dump(exclude_unset=True),
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        return ScheduledRun.model_validate(resp.json())
+
+    async def delete(self, schedule_id: str) -> None:
+        http = await self._c._get_http()
+        resp = await http.delete(
+            f"{self._c._base_url}/agent/schedules/{schedule_id}",
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+
+    async def runs(
+        self,
+        schedule_id: str,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> ScheduledRunsPage:
+        http = await self._c._get_http()
+        params: dict[str, Any] = {}
+        if limit is not None:
+            params["limit"] = limit
+        if cursor is not None:
+            params["cursor"] = cursor
+        resp = await http.get(
+            f"{self._c._base_url}/agent/schedules/{schedule_id}/runs",
+            headers=await self._c._headers(),
+            params=params,
+        )
+        self._c._raise_for_status(resp)
+        return _parse_scheduled_runs_page(resp.json())
+
+    async def runs_iter(
+        self,
+        schedule_id: str,
+        *,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> AsyncIterator[ScheduledRunResult]:
+        next_cursor = cursor
+        while True:
+            page = await self.runs(schedule_id, limit=limit, cursor=next_cursor)
+            for item in page.items:
+                yield item
+            if not page.next_cursor:
+                break
+            next_cursor = page.next_cursor
+
+
+class EventTriggersModule:
+    def __init__(self, client: AsyncTeardropClient) -> None:
+        self._c = client
+
+    async def create(self, request: CreateEventTriggerRequest) -> EventTriggerWithSecret:
+        http = await self._c._get_http()
+        resp = await http.post(
+            f"{self._c._base_url}/agent/event-triggers",
+            json=request.model_dump(exclude_none=True),
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        return EventTriggerWithSecret.model_validate(resp.json())
+
+    async def list(self) -> list[EventTrigger]:
+        http = await self._c._get_http()
+        resp = await http.get(
+            f"{self._c._base_url}/agent/event-triggers",
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        return _parse_list_response(resp.json(), EventTrigger)
+
+    async def get(self, trigger_id: str) -> EventTrigger:
+        http = await self._c._get_http()
+        resp = await http.get(
+            f"{self._c._base_url}/agent/event-triggers/{trigger_id}",
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        return EventTrigger.model_validate(resp.json())
+
+    async def update(self, trigger_id: str, request: UpdateEventTriggerRequest) -> EventTrigger:
+        http = await self._c._get_http()
+        resp = await http.patch(
+            f"{self._c._base_url}/agent/event-triggers/{trigger_id}",
+            json=request.model_dump(exclude_unset=True),
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        return EventTrigger.model_validate(resp.json())
+
+    async def delete(self, trigger_id: str) -> None:
+        http = await self._c._get_http()
+        resp = await http.delete(
+            f"{self._c._base_url}/agent/event-triggers/{trigger_id}",
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+
+    async def rotate_secret(self, trigger_id: str) -> dict[str, str]:
+        http = await self._c._get_http()
+        resp = await http.post(
+            f"{self._c._base_url}/agent/event-triggers/{trigger_id}/rotate-secret",
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        return resp.json()
+
+    async def runs(
+        self,
+        trigger_id: str,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> ScheduledRunsPage:
+        http = await self._c._get_http()
+        params: dict[str, Any] = {}
+        if limit is not None:
+            params["limit"] = limit
+        if cursor is not None:
+            params["cursor"] = cursor
+        resp = await http.get(
+            f"{self._c._base_url}/agent/event-triggers/{trigger_id}/runs",
+            headers=await self._c._headers(),
+            params=params,
+        )
+        self._c._raise_for_status(resp)
+        return _parse_scheduled_runs_page(resp.json())
+
+    async def runs_iter(
+        self,
+        trigger_id: str,
+        *,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> AsyncIterator[ScheduledRunResult]:
+        next_cursor = cursor
+        while True:
+            page = await self.runs(trigger_id, limit=limit, cursor=next_cursor)
+            for item in page.items:
+                yield item
+            if not page.next_cursor:
+                break
+            next_cursor = page.next_cursor
 
 
 class AsyncTeardropClient:
@@ -207,6 +413,8 @@ class AsyncTeardropClient:
             token=token,
         )
         self._http: httpx.AsyncClient | None = None
+        self.schedules = SchedulesModule(self)
+        self.event_triggers = EventTriggersModule(self)
         # Agent-card cache
         self._agent_card: AgentCard | None = None
         self._agent_card_fetched_at: float = 0.0
@@ -243,9 +451,7 @@ class AsyncTeardropClient:
             detail = body.get("error", "Payment required") if isinstance(body, dict) else str(body)
             reqs = body if isinstance(body, dict) else {}
             payment_header = resp.headers.get("X-PAYMENT-REQUIRED")
-            raise PaymentRequiredError(
-                detail, requirements=reqs, payment_header=payment_header
-            )
+            raise PaymentRequiredError(detail, requirements=reqs, payment_header=payment_header)
         if resp.status_code == 403:
             detail = body.get("detail", "Forbidden") if isinstance(body, dict) else str(body)
             raise ForbiddenError(detail)
@@ -362,9 +568,7 @@ class AsyncTeardropClient:
         self._raise_for_status(resp)
         return MeResponse.model_validate(resp.json())
 
-    async def register(
-        self, *, org_name: str, email: str, password: str
-    ) -> TokenResponse:
+    async def register(self, *, org_name: str, email: str, password: str) -> TokenResponse:
         """POST /register — self-serve org + user registration."""
         http = await self._get_http()
         resp = await http.post(
@@ -378,9 +582,7 @@ class AsyncTeardropClient:
         self._token_manager._expires_at = self._token_manager._read_exp(data.access_token)
         return data
 
-    async def register_invite(
-        self, *, token: str, email: str, password: str
-    ) -> TokenResponse:
+    async def register_invite(self, *, token: str, email: str, password: str) -> TokenResponse:
         """POST /register/invite — accept org invite and create user."""
         http = await self._get_http()
         resp = await http.post(
@@ -438,9 +640,7 @@ class AsyncTeardropClient:
         self._raise_for_status(resp)
         return resp.json()
 
-    async def invite(
-        self, *, email: str | None = None, role: str = "member"
-    ) -> dict[str, Any]:
+    async def invite(self, *, email: str | None = None, role: str = "member") -> dict[str, Any]:
         """POST /org/invite — create an org invite link.
 
         Note: The API strictly enforces ``role: "user"`` (or its alias
@@ -714,9 +914,7 @@ class AsyncTeardropClient:
     async def get_tool(self, tool_id: str) -> OrgTool:
         """GET /tools/{tool_id} — fetch a single tool by ID."""
         http = await self._get_http()
-        resp = await http.get(
-            f"{self._base_url}/tools/{tool_id}", headers=await self._headers()
-        )
+        resp = await http.get(f"{self._base_url}/tools/{tool_id}", headers=await self._headers())
         self._raise_for_status(resp)
         return OrgTool.model_validate(resp.json())
 
@@ -737,9 +935,7 @@ class AsyncTeardropClient:
     async def delete_tool(self, tool_id: str) -> None:
         """DELETE /tools/{tool_id} — soft-delete a tool (sets is_active=False)."""
         http = await self._get_http()
-        resp = await http.delete(
-            f"{self._base_url}/tools/{tool_id}", headers=await self._headers()
-        )
+        resp = await http.delete(f"{self._base_url}/tools/{tool_id}", headers=await self._headers())
         self._raise_for_status(resp)
 
     # ─── MCP Servers ───────────────────────────────────────────────────────────
@@ -864,7 +1060,8 @@ class AsyncTeardropClient:
 
         Args:
             org_slug: Filter by author org slug. Use ``"platform"`` for Teardrop built-in tools.
-            sort: Sort order — ``"name"``, ``"price_asc"``, or ``"price_desc"`` (default: ``"name"``)
+            sort: Sort order — ``"name"``, ``"price_asc"``, or
+                ``"price_desc"`` (default: ``"name"``)
             limit: Results per page (1–200, default: 100).
             cursor: Opaque pagination token from a previous response's ``next_cursor``.
 
@@ -1007,7 +1204,9 @@ class AsyncTeardropClient:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return _parse_list_response(resp.json(), MarketplaceSubscription, item_container="subscriptions")
+        return _parse_list_response(
+            resp.json(), MarketplaceSubscription, item_container="subscriptions"
+        )
 
     async def unsubscribe(self, subscription_id: str) -> None:
         """DELETE /marketplace/subscriptions/{id} — unsubscribe."""
@@ -1027,10 +1226,7 @@ class AsyncTeardropClient:
         ``set_llm_config`` or ``delete_llm_config`` succeeds.
         """
         now = time.time()
-        if (
-            self._llm_config_cache is not None
-            and now < self._llm_config_cache[1] + _LLM_CONFIG_TTL
-        ):
+        if self._llm_config_cache is not None and now < self._llm_config_cache[1] + _LLM_CONFIG_TTL:
             return self._llm_config_cache[0]
 
         http = await self._get_http()
@@ -1055,7 +1251,8 @@ class AsyncTeardropClient:
         """PUT /llm-config — create or update the org's LLM configuration.
 
         Args:
-            provider: LLM provider — ``"anthropic"``, ``"openai"``, ``"google"``, or ``"openrouter"``.
+            provider: LLM provider — ``"anthropic"``, ``"openai"``,
+                ``"google"``, or ``"openrouter"``.
             model: Model identifier (e.g. ``"claude-haiku-4-5-20251001"``).
             routing_preference: ``"default"``, ``"cost"``, ``"speed"``, or ``"quality"``.
             api_key: BYOK API key behaviour:
@@ -1208,8 +1405,7 @@ class AsyncTeardropClient:
         """
         if provider not in MODELS_BY_PROVIDER:
             raise ValueError(
-                f"Unknown provider {provider!r}. "
-                f"Supported: {list(MODELS_BY_PROVIDER.keys())}"
+                f"Unknown provider {provider!r}. Supported: {list(MODELS_BY_PROVIDER.keys())}"
             )
         return list(MODELS_BY_PROVIDER[provider])
 
@@ -1269,9 +1465,7 @@ class AsyncTeardropClient:
         self._raise_for_status(resp)
         return AgentWallet.model_validate(resp.json())
 
-    async def get_agent_wallet(
-        self, *, include_balance: bool = False
-    ) -> AgentWallet:
+    async def get_agent_wallet(self, *, include_balance: bool = False) -> AgentWallet:
         """GET /wallets/agent — get org agent wallet."""
         http = await self._get_http()
         params: dict[str, Any] = {}
@@ -1331,6 +1525,101 @@ class AsyncTeardropClient:
 # ─── Sync wrapper ─────────────────────────────────────────────────────────────
 
 
+class _SyncSchedulesModule:
+    def __init__(self, client: TeardropClient) -> None:
+        self._c = client
+
+    def create(self, request: CreateScheduleRequest) -> ScheduledRun:
+        return self._c._run(self._c._async.schedules.create(request))
+
+    def list(self) -> list[ScheduledRun]:
+        return self._c._run(self._c._async.schedules.list())
+
+    def get(self, schedule_id: str) -> ScheduledRun:
+        return self._c._run(self._c._async.schedules.get(schedule_id))
+
+    def update(self, schedule_id: str, request: UpdateScheduleRequest) -> ScheduledRun:
+        return self._c._run(self._c._async.schedules.update(schedule_id, request))
+
+    def delete(self, schedule_id: str) -> None:
+        return self._c._run(self._c._async.schedules.delete(schedule_id))
+
+    def runs(
+        self,
+        schedule_id: str,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> ScheduledRunsPage:
+        return self._c._run(self._c._async.schedules.runs(schedule_id, limit=limit, cursor=cursor))
+
+    def runs_iter(
+        self,
+        schedule_id: str,
+        *,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> Iterator[ScheduledRunResult]:
+        next_cursor = cursor
+        while True:
+            page = self.runs(schedule_id, limit=limit, cursor=next_cursor)
+            for item in page.items:
+                yield item
+            if not page.next_cursor:
+                break
+            next_cursor = page.next_cursor
+
+
+class _SyncEventTriggersModule:
+    def __init__(self, client: TeardropClient) -> None:
+        self._c = client
+
+    def create(self, request: CreateEventTriggerRequest) -> EventTriggerWithSecret:
+        return self._c._run(self._c._async.event_triggers.create(request))
+
+    def list(self) -> list[EventTrigger]:
+        return self._c._run(self._c._async.event_triggers.list())
+
+    def get(self, trigger_id: str) -> EventTrigger:
+        return self._c._run(self._c._async.event_triggers.get(trigger_id))
+
+    def update(self, trigger_id: str, request: UpdateEventTriggerRequest) -> EventTrigger:
+        return self._c._run(self._c._async.event_triggers.update(trigger_id, request))
+
+    def delete(self, trigger_id: str) -> None:
+        return self._c._run(self._c._async.event_triggers.delete(trigger_id))
+
+    def rotate_secret(self, trigger_id: str) -> dict[str, str]:
+        return self._c._run(self._c._async.event_triggers.rotate_secret(trigger_id))
+
+    def runs(
+        self,
+        trigger_id: str,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> ScheduledRunsPage:
+        return self._c._run(
+            self._c._async.event_triggers.runs(trigger_id, limit=limit, cursor=cursor)
+        )
+
+    def runs_iter(
+        self,
+        trigger_id: str,
+        *,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> Iterator[ScheduledRunResult]:
+        next_cursor = cursor
+        while True:
+            page = self.runs(trigger_id, limit=limit, cursor=next_cursor)
+            for item in page.items:
+                yield item
+            if not page.next_cursor:
+                break
+            next_cursor = page.next_cursor
+
+
 class TeardropClient:
     """Synchronous wrapper around ``AsyncTeardropClient``.
 
@@ -1348,6 +1637,8 @@ class TeardropClient:
 
     def __init__(self, *args: Any, **kwargs: Any):
         self._async = AsyncTeardropClient(*args, **kwargs)
+        self.schedules = _SyncSchedulesModule(self)
+        self.event_triggers = _SyncEventTriggersModule(self)
         self._portal: Any | None = None
         self._portal_exit: Any | None = None
 

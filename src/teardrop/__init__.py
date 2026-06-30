@@ -25,15 +25,19 @@ from teardrop.models import (
     BillingBalance,
     BillingHistoryEntry,
     BillingPricingResponse,
-    # Backward-compat aliases
     CreateCustomToolRequest,
+    # Backward-compat aliases
+    CreateEventTriggerRequest,
     CreateMcpServerRequest,
     CreateOrgToolRequest,
+    CreateScheduleRequest,
     CreditBalance,
     CreditHistoryEntry,
     CustomTool,
     DiscoverMcpToolsResponse,
     EarningsEntry,
+    EventTrigger,
+    EventTriggerWithSecret,
     Invoice,
     JwtPayloadBase,
     LinkWalletRequest,
@@ -56,6 +60,9 @@ from teardrop.models import (
     ProviderType,
     RegenerateCredentialsResponse,
     RoutingPreference,
+    ScheduledRun,
+    ScheduledRunResult,
+    ScheduledRunsPage,
     SetLlmConfigRequest,
     SSEEvent,
     StoreMemoryRequest,
@@ -66,8 +73,10 @@ from teardrop.models import (
     ToolPolicy,
     ToolPricing,
     TrustedAgent,
+    UpdateEventTriggerRequest,
     UpdateMcpServerRequest,
     UpdateOrgToolRequest,
+    UpdateScheduleRequest,
     UsageSummary,
     UsdcTopupRequest,
     UsdcTopupRequirements,
@@ -96,6 +105,7 @@ from teardrop.streaming import (
     parse_mcp_tool_name,
     parse_usdc,
 )
+from teardrop.webhook_verify import sign_webhook, verify_webhook
 
 __all__ = [
     # Clients
@@ -118,6 +128,15 @@ __all__ = [
     "CreditHistoryEntry",
     "Invoice",
     "PricingInfo",
+    "CreateScheduleRequest",
+    "ScheduledRun",
+    "ScheduledRunResult",
+    "ScheduledRunsPage",
+    "UpdateScheduleRequest",
+    "CreateEventTriggerRequest",
+    "EventTrigger",
+    "EventTriggerWithSecret",
+    "UpdateEventTriggerRequest",
     "StripeTopupRequest",
     "StripeTopupResponse",
     "StripeTopupStatusResponse",
@@ -204,5 +223,6 @@ __all__ = [
     "EVENT_TOOL_CALL_END",
     "EVENT_TOOL_CALL_START",
     "EVENT_USAGE_SUMMARY",
+    "sign_webhook",
+    "verify_webhook",
 ]
-

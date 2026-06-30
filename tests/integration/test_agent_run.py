@@ -30,7 +30,6 @@ from teardrop.streaming import (
     EVENT_USAGE_SUMMARY,
 )
 
-
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -54,9 +53,7 @@ def _collect_text(events: List[SSEEvent]) -> str:
 
 
 @pytest.fixture(scope="session")
-def cached_run_events(
-    integration_url: str, _cached_token: str
-) -> List[SSEEvent]:
+def cached_run_events(integration_url: str, _cached_token: str) -> List[SSEEvent]:
     """Run the agent once and cache all SSE events for the session.
 
     Uses a dedicated event loop via ``asyncio.run`` so the cache can be shared
@@ -82,9 +79,7 @@ def cached_run_events(
 class TestRunBasicShape:
     """Verify that a real agent run emits the expected event structure."""
 
-    async def test_run_returns_sse_events(
-        self, cached_run_events: List[SSEEvent]
-    ) -> None:
+    async def test_run_returns_sse_events(self, cached_run_events: List[SSEEvent]) -> None:
         """The agent run stream yields at least one SSEEvent."""
         assert cached_run_events, "Expected at least one SSE event from agent run"
         for event in cached_run_events:
@@ -92,9 +87,7 @@ class TestRunBasicShape:
             assert event.type  # Type must be non-empty
             assert isinstance(event.data, dict)
 
-    async def test_run_starts_and_finishes(
-        self, cached_run_events: List[SSEEvent]
-    ) -> None:
+    async def test_run_starts_and_finishes(self, cached_run_events: List[SSEEvent]) -> None:
         """RUN_STARTED event is present and the stream ends gracefully."""
         types = {e.type for e in cached_run_events}
         if "ERROR" in types and not (types & {EVENT_RUN_FINISHED, EVENT_DONE}):
@@ -105,9 +98,7 @@ class TestRunBasicShape:
             "Expected RUN_FINISHED or DONE event at end of stream"
         )
 
-    async def test_run_collects_text(
-        self, cached_run_events: List[SSEEvent]
-    ) -> None:
+    async def test_run_collects_text(self, cached_run_events: List[SSEEvent]) -> None:
         """TEXT_MESSAGE_CONTENT events produce non-empty text output."""
         types = {e.type for e in cached_run_events}
         if "ERROR" in types and EVENT_TEXT_MSG_CONTENT not in types:
@@ -122,9 +113,7 @@ class TestRunBasicShape:
 class TestRunThreadBehaviour:
     """Thread ID handling and multi-turn conversation continuity."""
 
-    async def test_run_with_explicit_thread_id(
-        self, async_client: AsyncTeardropClient
-    ) -> None:
+    async def test_run_with_explicit_thread_id(self, async_client: AsyncTeardropClient) -> None:
         """Runs with an explicit thread_id complete without error."""
         thread_id = f"thread_{uuid.uuid4().hex[:8]}"
         events: List[SSEEvent] = []
@@ -134,9 +123,7 @@ class TestRunThreadBehaviour:
         types = {e.type for e in events}
         assert EVENT_RUN_STARTED in types, "Expected RUN_STARTED event"
 
-    async def test_run_multi_turn_thread(
-        self, async_client: AsyncTeardropClient
-    ) -> None:
+    async def test_run_multi_turn_thread(self, async_client: AsyncTeardropClient) -> None:
         """Two sequential calls on the same thread_id both produce SSE events."""
         thread_id = f"thread_{uuid.uuid4().hex[:8]}"
 
@@ -145,9 +132,7 @@ class TestRunThreadBehaviour:
             events1.append(event)
 
         events2: List[SSEEvent] = []
-        async for event in async_client.run(
-            "And what is 2 + 2?", thread_id=thread_id
-        ):
+        async for event in async_client.run("And what is 2 + 2?", thread_id=thread_id):
             events2.append(event)
 
         assert events1, "First turn must produce SSE events"
@@ -161,9 +146,7 @@ class TestRunThreadBehaviour:
 
 
 class TestRunContextForwarding:
-    async def test_run_context_accepted(
-        self, async_client: AsyncTeardropClient
-    ) -> None:
+    async def test_run_context_accepted(self, async_client: AsyncTeardropClient) -> None:
         """run() with a context dict completes without raising an error."""
         events: List[SSEEvent] = []
         async for event in async_client.run(
@@ -184,9 +167,7 @@ class TestRunValidationBoundaries:
             async for _ in async_client.run("x" * 4097):
                 pass  # pragma: no cover
 
-    async def test_run_invalid_auth_raises(
-        self, integration_url: str
-    ) -> None:
+    async def test_run_invalid_auth_raises(self, integration_url: str) -> None:
         """A garbage token causes AuthenticationError on the first stream iteration."""
         bad_client = AsyncTeardropClient(integration_url, token="garbage.token.xyz")
         with pytest.raises(AuthenticationError):
@@ -195,9 +176,7 @@ class TestRunValidationBoundaries:
 
 
 class TestRunUsageSummary:
-    async def test_usage_summary_event_present(
-        self, cached_run_events: List[SSEEvent]
-    ) -> None:
+    async def test_usage_summary_event_present(self, cached_run_events: List[SSEEvent]) -> None:
         """If the server emits a USAGE_SUMMARY event, it must carry numeric token counts."""
         usage_events = [e for e in cached_run_events if e.type == EVENT_USAGE_SUMMARY]
         if not usage_events:
@@ -206,7 +185,9 @@ class TestRunUsageSummary:
         data = usage_events[0].data
         # Accept common key name variations used by the API
         tokens_in = data.get("tokens_in", data.get("input_tokens", data.get("prompt_tokens")))
-        tokens_out = data.get("tokens_out", data.get("output_tokens", data.get("completion_tokens")))
+        tokens_out = data.get(
+            "tokens_out", data.get("output_tokens", data.get("completion_tokens"))
+        )
         assert tokens_in is not None, f"Expected tokens_in in USAGE_SUMMARY data: {data}"
         assert tokens_out is not None, f"Expected tokens_out in USAGE_SUMMARY data: {data}"
         assert isinstance(tokens_in, int) and tokens_in >= 0

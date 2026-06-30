@@ -12,7 +12,6 @@ from teardrop.models import AddTrustedAgentRequest, TrustedAgent
 
 from .conftest import _json_response
 
-
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
 

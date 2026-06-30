@@ -95,17 +95,13 @@ async def email_secret_client(
 class TestLoginFlow:
     """Email+secret client auto-authenticates and stores tokens correctly."""
 
-    async def test_login_with_email_secret(
-        self, email_secret_client: AsyncTeardropClient
-    ) -> None:
+    async def test_login_with_email_secret(self, email_secret_client: AsyncTeardropClient) -> None:
         """Client with email+secret auto-authenticates on the first API call."""
         result = await email_secret_client.get_me()
         assert isinstance(result, MeResponse)
         assert result.org_id  # Non-empty after successful auth
 
-    async def test_token_stored_after_login(
-        self, email_secret_client: AsyncTeardropClient
-    ) -> None:
+    async def test_token_stored_after_login(self, email_secret_client: AsyncTeardropClient) -> None:
         """After the first authenticated call, token is cached inside TokenManager."""
         await email_secret_client.get_me()
         assert email_secret_client._token_manager._token
@@ -138,9 +134,7 @@ class TestLoginFlow:
 class TestTokenRefresh:
     """Refresh-token rotation and logout invalidation."""
 
-    async def test_refresh_token_flow(
-        self, email_secret_client: AsyncTeardropClient
-    ) -> None:
+    async def test_refresh_token_flow(self, email_secret_client: AsyncTeardropClient) -> None:
         """After login, the refresh token can be exchanged for a new access token."""
         await email_secret_client.get_me()
         refresh_token = email_secret_client._token_manager._refresh_token
@@ -166,7 +160,9 @@ class TestTokenRefresh:
         try:
             await email_secret_client.logout(refresh_token)
         except (AuthenticationError, RateLimitError) as exc:
-            pytest.skip(f"Auth endpoint rate-limited during logout; cannot test invalidation: {exc}")
+            pytest.skip(
+                f"Auth endpoint rate-limited during logout; cannot test invalidation: {exc}"
+            )
 
         # After logout, refreshing should fail — but some servers don't enforce
         # single-use refresh tokens or immediate revocation.
@@ -183,9 +179,7 @@ class TestTokenRefresh:
 class TestStaticTokenClient:
     """A pre-authenticated static-token client works without credential refresh."""
 
-    async def test_static_token_bypasses_refresh(
-        self, async_client: AsyncTeardropClient
-    ) -> None:
+    async def test_static_token_bypasses_refresh(self, async_client: AsyncTeardropClient) -> None:
         """Client initialised with a static token has can_refresh=False yet succeeds."""
         assert not async_client._token_manager.can_refresh
         result = await async_client.get_me()
@@ -203,9 +197,7 @@ class TestStaticTokenClient:
 
 
 class TestSiweNonce:
-    async def test_siwe_nonce_is_unique(
-        self, async_client: AsyncTeardropClient
-    ) -> None:
+    async def test_siwe_nonce_is_unique(self, async_client: AsyncTeardropClient) -> None:
         """Two consecutive nonce requests must return different one-time values."""
         r1 = await async_client.get_siwe_nonce()
         r2 = await async_client.get_siwe_nonce()

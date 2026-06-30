@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -72,6 +73,7 @@ class SSEEvent(BaseModel):
     id: str = Field(default="", description="SSE event ID (for stream resumption)")
     retry: int | None = Field(default=None, description="SSE retry interval in ms")
 
+
 class AgentTool(BaseModel):
     """A tool available for agent runs, as returned by GET /agent/tools."""
 
@@ -84,6 +86,125 @@ class AgentToolsResponse(BaseModel):
     """Envelope response from GET /agent/tools."""
 
     tools: list[AgentTool] = Field(default_factory=list)
+
+
+def _validate_https_callback_url(value: str | None) -> str | None:
+    if value is None:
+        return value
+
+    parsed = urlparse(value)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError("callback_url must be an absolute https URL")
+    return value
+
+
+class ScheduledRun(BaseModel):
+    id: str
+    org_id: str
+    user_id: str
+    name: str
+    prompt: str
+    schedule_kind: Literal["interval"]
+    interval_seconds: int
+    enabled: bool
+    callback_url: str | None = None
+    next_run_at: str | None = None
+    last_run_at: str | None = None
+    consecutive_failures: int = 0
+    created_at: str = ""
+    updated_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+class ScheduledRunResult(BaseModel):
+    id: str
+    schedule_id: str
+    org_id: str
+    run_id: str
+    status: str
+    output_text: str = ""
+    cost_usdc: int = 0
+    error: str = ""
+    created_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+class ScheduledRunsPage(BaseModel):
+    items: list[ScheduledRunResult] = Field(default_factory=list)
+    next_cursor: str | None = None
+
+
+class CreateScheduleRequest(BaseModel):
+    name: str
+    prompt: str
+    interval_seconds: int = Field(ge=1)
+    callback_url: str | None = None
+
+    @field_validator("callback_url")
+    @classmethod
+    def _validate_callback_url(cls, value: str | None) -> str | None:
+        return _validate_https_callback_url(value)
+
+
+class UpdateScheduleRequest(BaseModel):
+    name: str | None = None
+    prompt: str | None = None
+    interval_seconds: int | None = Field(default=None, ge=1)
+    enabled: bool | None = None
+    callback_url: str | None = None
+
+    @field_validator("callback_url")
+    @classmethod
+    def _validate_callback_url(cls, value: str | None) -> str | None:
+        return _validate_https_callback_url(value)
+
+
+class EventTrigger(BaseModel):
+    id: str
+    org_id: str
+    user_id: str
+    name: str
+    prompt: str
+    schedule_kind: Literal["event"]
+    enabled: bool
+    callback_url: str | None = None
+    trigger_token: str | None = None
+    event_path: str | None = None
+    consecutive_failures: int = 0
+    last_run_at: str | None = None
+    created_at: str = ""
+    updated_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+class EventTriggerWithSecret(EventTrigger):
+    secret: str
+
+
+class CreateEventTriggerRequest(BaseModel):
+    name: str
+    prompt: str
+    callback_url: str | None = None
+
+    @field_validator("callback_url")
+    @classmethod
+    def _validate_callback_url(cls, value: str | None) -> str | None:
+        return _validate_https_callback_url(value)
+
+
+class UpdateEventTriggerRequest(BaseModel):
+    name: str | None = None
+    prompt: str | None = None
+    enabled: bool | None = None
+    callback_url: str | None = None
+
+    @field_validator("callback_url")
+    @classmethod
+    def _validate_callback_url(cls, value: str | None) -> str | None:
+        return _validate_https_callback_url(value)
 
 
 # ─── Billing ──────────────────────────────────────────────────────────────────
@@ -488,7 +609,9 @@ class ModelInfo(BaseModel):
     supports_streaming: bool = False
     quality_tier: int = 0
     knowledge_cutoff: str = ""  # model training data cutoff date (e.g. "2025-10") or "Unknown"
-    training_cutoff_note: str = ""  # human-readable description (e.g. "Training data through October 2025")
+    training_cutoff_note: str = (
+        ""  # human-readable description (e.g. "Training data through October 2025")
+    )
     pricing: ModelPricing = Field(default_factory=ModelPricing)
     benchmarks: ModelRunBenchmarks | None = None
 

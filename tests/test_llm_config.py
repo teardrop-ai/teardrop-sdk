@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from teardrop.client import AsyncTeardropClient, _LLM_CONFIG_TTL, _MODEL_BENCHMARKS_TTL
-from teardrop.exceptions import AuthenticationError, NotFoundError, ValidationError
+from teardrop.client import _LLM_CONFIG_TTL, _MODEL_BENCHMARKS_TTL, AsyncTeardropClient
+from teardrop.exceptions import AuthenticationError, NotFoundError
 from teardrop.models import (
     MODELS_BY_PROVIDER,
     ModelBenchmarksResponse,
@@ -183,9 +183,7 @@ class TestSetLlmConfig:
                 assert first.model == "claude-haiku-4-5-20251001"
 
                 # Update — should replace the cache.
-                await client.set_llm_config(
-                    provider="anthropic", model="claude-sonnet-4-20250514"
-                )
+                await client.set_llm_config(provider="anthropic", model="claude-sonnet-4-20250514")
 
                 # Next GET should use the cache and NOT hit the network again.
                 cached = await client.get_llm_config()

@@ -13,7 +13,6 @@ from teardrop.exceptions import (
     APIError,
     AuthenticationError,
     ConflictError,
-    ForbiddenError,
     GatewayError,
     NotFoundError,
     ValidationError,
@@ -25,7 +24,6 @@ from teardrop.models import (
     UpdateMcpServerRequest,
 )
 from teardrop.streaming import parse_mcp_tool_name
-
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -87,7 +85,12 @@ class TestCreateMcpServer:
     async def test_create_with_bearer_auth(
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
-        server_with_auth = {**_SERVER, "name": "secure_srv", "has_auth": True, "auth_type": "bearer"}
+        server_with_auth = {
+            **_SERVER,
+            "name": "secure_srv",
+            "has_auth": True,
+            "auth_type": "bearer",
+        }
         mock_http.post = AsyncMock(return_value=_json_response(server_with_auth, status=201))
         req = CreateMcpServerRequest(
             name="secure_srv",
@@ -157,9 +160,7 @@ class TestCreateMcpServer:
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
         """ConflictError inherits APIError — existing catch-all handlers still work."""
-        mock_http.post = AsyncMock(
-            return_value=_json_response({"detail": "conflict"}, status=409)
-        )
+        mock_http.post = AsyncMock(return_value=_json_response({"detail": "conflict"}, status=409))
         req = CreateMcpServerRequest(name="my_server", url="https://mcp.example.com/sse")
         with pytest.raises(APIError):
             await client.create_mcp_server(req)
@@ -210,9 +211,7 @@ class TestGetMcpServer:
     async def test_get_not_found_raises_not_found_error(
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
-        mock_http.get = AsyncMock(
-            return_value=_json_response({"detail": "Not found"}, status=404)
-        )
+        mock_http.get = AsyncMock(return_value=_json_response({"detail": "Not found"}, status=404))
         with pytest.raises(NotFoundError):
             await client.get_mcp_server("nonexistent-id")
 
@@ -220,9 +219,7 @@ class TestGetMcpServer:
     async def test_not_found_is_subclass_of_api_error(
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
-        mock_http.get = AsyncMock(
-            return_value=_json_response({"detail": "Not found"}, status=404)
-        )
+        mock_http.get = AsyncMock(return_value=_json_response({"detail": "Not found"}, status=404))
         with pytest.raises(APIError):
             await client.get_mcp_server("nonexistent-id")
 
@@ -235,9 +232,7 @@ class TestUpdateMcpServer:
     async def test_patch_sends_only_set_fields(
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
-        mock_http.patch = AsyncMock(
-            return_value=_json_response({**_SERVER, "is_active": False})
-        )
+        mock_http.patch = AsyncMock(return_value=_json_response({**_SERVER, "is_active": False}))
         req = UpdateMcpServerRequest(is_active=False)
         await client.update_mcp_server("srv-1", req)
         call_kwargs = mock_http.patch.call_args.kwargs
@@ -247,9 +242,7 @@ class TestUpdateMcpServer:
     async def test_patch_clear_token_sends_explicit_null(
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
-        mock_http.patch = AsyncMock(
-            return_value=_json_response({**_SERVER, "has_auth": False})
-        )
+        mock_http.patch = AsyncMock(return_value=_json_response({**_SERVER, "has_auth": False}))
         req = UpdateMcpServerRequest(auth_token=None)
         result = await client.update_mcp_server("srv-1", req)
         call_kwargs = mock_http.patch.call_args.kwargs
@@ -271,9 +264,7 @@ class TestUpdateMcpServer:
             await client.update_mcp_server("srv-1", req)
 
     @pytest.mark.asyncio
-    async def test_patch_not_found(
-        self, client: AsyncTeardropClient, mock_http: AsyncMock
-    ) -> None:
+    async def test_patch_not_found(self, client: AsyncTeardropClient, mock_http: AsyncMock) -> None:
         mock_http.patch = AsyncMock(
             return_value=_json_response({"detail": "Not found"}, status=404)
         )
@@ -348,9 +339,7 @@ class TestDiscoverMcpServerTools:
     async def test_discover_server_not_found(
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
-        mock_http.post = AsyncMock(
-            return_value=_json_response({"detail": "Not found"}, status=404)
-        )
+        mock_http.post = AsyncMock(return_value=_json_response({"detail": "Not found"}, status=404))
         with pytest.raises(NotFoundError):
             await client.discover_mcp_server_tools("nonexistent-id")
 

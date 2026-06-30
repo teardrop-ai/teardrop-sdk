@@ -127,9 +127,7 @@ async def iter_sse_events(response: httpx.Response) -> AsyncIterator[SSEEvent]:
 
 def collect_text(events: list[SSEEvent]) -> str:
     """Convenience: concatenate all TEXT_MESSAGE_CONTENT deltas into a string."""
-    return "".join(
-        e.data.get("delta", "") for e in events if e.type == EVENT_TEXT_MSG_CONTENT
-    )
+    return "".join(e.data.get("delta", "") for e in events if e.type == EVENT_TEXT_MSG_CONTENT)
 
 
 async def async_collect_text(events: AsyncIterator[SSEEvent]) -> str:
@@ -213,8 +211,7 @@ def parse_marketplace_tool_name(qualified_name: str) -> dict[str, str]:
     idx = qualified_name.find(_MARKETPLACE_SEPARATOR)
     if idx <= 0:
         raise ValueError(
-            f"Invalid qualified tool name {qualified_name!r}: "
-            "expected 'org_slug/tool_name' format"
+            f"Invalid qualified tool name {qualified_name!r}: expected 'org_slug/tool_name' format"
         )
     return {
         "org_slug": qualified_name[:idx],
@@ -235,7 +232,7 @@ def format_usdc(atomic: int) -> str:
         format_usdc(1_500_000)  # → "1.500000"
         format_usdc(50)         # → "0.000050"
     """
-    return f"{atomic / 10 ** _USDC_DECIMALS:.{_USDC_DECIMALS}f}"
+    return f"{atomic / 10**_USDC_DECIMALS:.{_USDC_DECIMALS}f}"
 
 
 def parse_usdc(dollars: str | float) -> int:
@@ -246,5 +243,4 @@ def parse_usdc(dollars: str | float) -> int:
         parse_usdc("1.50")  # → 1_500_000
         parse_usdc(0.25)    # → 250_000
     """
-    return int(round(float(dollars) * 10 ** _USDC_DECIMALS))
-
+    return int(round(float(dollars) * 10**_USDC_DECIMALS))

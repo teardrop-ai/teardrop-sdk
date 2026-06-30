@@ -25,11 +25,6 @@ from teardrop.models import (
     BillingPricingResponse,
     CreditHistoryEntry,
     Invoice,
-    MarketplaceSubscription,
-    MarketplaceTool,
-    OrgMcpServer,
-    OrgTool,
-    TrustedAgent,
     UsageSummary,
     Wallet,
 )
@@ -64,6 +59,7 @@ class TestRaiseForStatus:
             request=httpx.Request("GET", "http://test"),
         )
         from teardrop.exceptions import APIError
+
         with pytest.raises(APIError) as exc_info:
             client._raise_for_status(resp)
         # body attribute should contain the raw response text
@@ -124,14 +120,20 @@ class TestRun:
     async def test_run_with_usage_date_params(self):
         """get_usage forwards optional start/end params."""
         from unittest.mock import AsyncMock, patch
+
         from teardrop.models import UsageSummary
 
         client = AsyncTeardropClient("http://test", token="tok.en.sig")
         mock = AsyncMock()
         mock.is_closed = False
         mock.get.return_value = _json_response(
-            {"total_runs": 0, "total_tokens_in": 0, "total_tokens_out": 0,
-             "total_tool_calls": 0, "total_duration_ms": 0}
+            {
+                "total_runs": 0,
+                "total_tokens_in": 0,
+                "total_tokens_out": 0,
+                "total_tool_calls": 0,
+                "total_duration_ms": 0,
+            }
         )
         client._http = mock
         with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
@@ -154,13 +156,20 @@ class TestRun:
     @pytest.mark.asyncio
     async def test_run_yields_sse_events(self):
         import json
+
         def _ev(event, data=None):
             return json.dumps({"event": event, "data": data or {}}).encode()
 
         sse_bytes = (
-            b"data: " + _ev("RUN_STARTED") + b"\n\n"
-            + b"data: " + _ev("TEXT_MESSAGE_CONTENT", {"delta": "hi"}) + b"\n\n"
-            + b"data: " + _ev("DONE") + b"\n\n"
+            b"data: "
+            + _ev("RUN_STARTED")
+            + b"\n\n"
+            + b"data: "
+            + _ev("TEXT_MESSAGE_CONTENT", {"delta": "hi"})
+            + b"\n\n"
+            + b"data: "
+            + _ev("DONE")
+            + b"\n\n"
         )
 
         async def _aiter_lines():
@@ -252,8 +261,14 @@ class TestGetWallets:
     @pytest.mark.asyncio
     async def test_returns_wallet_list(self):
         wallets_data = [
-            {"id": "w-1", "address": "0xABC", "chain_id": 8453,
-             "user_id": "u-1", "is_primary": False, "created_at": "2026-01-01T00:00:00Z"}
+            {
+                "id": "w-1",
+                "address": "0xABC",
+                "chain_id": 8453,
+                "user_id": "u-1",
+                "is_primary": False,
+                "created_at": "2026-01-01T00:00:00Z",
+            }
         ]
         mock_http = AsyncMock()
         mock_http.is_closed = False
@@ -272,8 +287,13 @@ class TestGetWallets:
 class TestGetAgentCard:
     @pytest.mark.asyncio
     async def test_returns_agent_card(self):
-        card_data = {"name": "Teardrop Agent", "description": "AI agent", "url": "http://x",
-                     "skills": [], "unknown_field": "preserved"}
+        card_data = {
+            "name": "Teardrop Agent",
+            "description": "AI agent",
+            "url": "http://x",
+            "skills": [],
+            "unknown_field": "preserved",
+        }
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(card_data))
@@ -290,6 +310,7 @@ class TestGetMe:
     @pytest.mark.asyncio
     async def test_returns_jwt_payload(self):
         from teardrop.models import JwtPayloadBase
+
         me_data = {
             "sub": "user-1",
             "org_id": "org-1",
@@ -369,6 +390,7 @@ class TestTopupStripe:
     @pytest.mark.asyncio
     async def test_returns_stripe_response(self):
         from teardrop.models import StripeTopupRequest, StripeTopupResponse
+
         topup_data = {"client_secret": "cs_abc", "session_id": "sess_abc"}
         mock_http = AsyncMock()
         mock_http.is_closed = False
@@ -502,9 +524,7 @@ class TestFromAgentCard:
             mock_http.get = AsyncMock(return_value=_json_response(card_data))
             MockAsyncClient.return_value = mock_http
 
-            client = await AsyncTeardropClient.from_agent_card(
-                "http://test", token="tok.en.sig"
-            )
+            client = await AsyncTeardropClient.from_agent_card("http://test", token="tok.en.sig")
             try:
                 assert client._agent_card is not None
                 assert client._agent_card.name == "Teardrop Agent"
@@ -535,6 +555,7 @@ class TestTransportErrors:
         mock_http.post.side_effect = httpx.ConnectError("refused")
         with pytest.raises(TeardropError, match="Connection failed"):
             from teardrop.models import StoreMemoryRequest
+
             await client.create_memory(StoreMemoryRequest(content="test"))
 
 
@@ -543,12 +564,18 @@ class TestGetAgentTools:
 
     @pytest.mark.asyncio
     async def test_returns_list_of_agent_tools(self, client, mock_http):
-        mock_http.get.return_value = _json_response({
-            "tools": [
-                {"name": "platform/web_search", "source": "platform", "access_mode": "included"},
-                {"name": "acme/my_tool", "source": "marketplace", "access_mode": "subscribed"},
-            ]
-        })
+        mock_http.get.return_value = _json_response(
+            {
+                "tools": [
+                    {
+                        "name": "platform/web_search",
+                        "source": "platform",
+                        "access_mode": "included",
+                    },
+                    {"name": "acme/my_tool", "source": "marketplace", "access_mode": "subscribed"},
+                ]
+            }
+        )
         result = await client.get_agent_tools()
         assert len(result) == 2
         assert result[0].name == "platform/web_search"
@@ -631,7 +658,14 @@ class TestParseListResponse:
         from teardrop.models import BillingHistoryEntry
 
         data = [
-            {"run_id": "r-1", "user_id": "u-1", "amount_usdc": 100, "method": "credit", "status": "settled", "created_at": "2026-01-01T00:00:00Z"},
+            {
+                "run_id": "r-1",
+                "user_id": "u-1",
+                "amount_usdc": 100,
+                "method": "credit",
+                "status": "settled",
+                "created_at": "2026-01-01T00:00:00Z",
+            },
         ]
         result = _parse_list_response(data, BillingHistoryEntry)
         assert len(result) == 1
@@ -642,7 +676,14 @@ class TestParseListResponse:
 
         data = {
             "items": [
-                {"run_id": "r-1", "user_id": "u-1", "amount_usdc": 100, "method": "credit", "status": "settled", "created_at": "2026-01-01T00:00:00Z"},
+                {
+                    "run_id": "r-1",
+                    "user_id": "u-1",
+                    "amount_usdc": 100,
+                    "method": "credit",
+                    "status": "settled",
+                    "created_at": "2026-01-01T00:00:00Z",
+                },
             ],
             "next_cursor": None,
         }

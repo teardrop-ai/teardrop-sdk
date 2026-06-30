@@ -17,11 +17,13 @@ from teardrop.streaming import (
     parse_usdc,
 )
 
+
 # Helper: build a spec-format SSE data line
 def _sse(event: str, data: dict | None = None) -> str:
     import json
+
     payload = {"event": event, "data": data or {}}
-    return f'data: {json.dumps(payload)}'
+    return f"data: {json.dumps(payload)}"
 
 
 class _FakeResponse:
@@ -328,7 +330,7 @@ class TestTextMessageMarkers:
 
     @pytest.mark.asyncio
     async def test_start_end_content_round_trip(self):
-        from teardrop.streaming import EVENT_TEXT_MSG_START, EVENT_TEXT_MSG_END
+        from teardrop.streaming import EVENT_TEXT_MSG_END, EVENT_TEXT_MSG_START
 
         lines = [
             _sse("TEXT_MESSAGE_START", {"message_id": "msg-1"}),
@@ -379,18 +381,21 @@ class TestUsageSummaryWithCacheTokens:
     @pytest.mark.asyncio
     async def test_cache_read_tokens_in_event_data(self):
         lines = [
-            _sse("USAGE_SUMMARY", {
-                "run_id": "run-1",
-                "tokens_in": 100,
-                "tokens_out": 50,
-                "tool_calls": 2,
-                "duration_ms": 5000,
-                "cost_usdc": 1000,
-                "platform_fee_usdc": 0,
-                "delegation_cost_usdc": 0,
-                "cache_read_tokens": 200,
-                "cache_creation_tokens": 150,
-            }),
+            _sse(
+                "USAGE_SUMMARY",
+                {
+                    "run_id": "run-1",
+                    "tokens_in": 100,
+                    "tokens_out": 50,
+                    "tool_calls": 2,
+                    "duration_ms": 5000,
+                    "cost_usdc": 1000,
+                    "platform_fee_usdc": 0,
+                    "delegation_cost_usdc": 0,
+                    "cache_read_tokens": 200,
+                    "cache_creation_tokens": 150,
+                },
+            ),
             "",
         ]
         events = [e async for e in iter_sse_events(_FakeResponse(lines))]
@@ -405,16 +410,19 @@ class TestUsageSummaryWithCacheTokens:
     async def test_cache_tokens_absent_by_default(self):
         """Legacy USAGE_SUMMARY without cache tokens should not break."""
         lines = [
-            _sse("USAGE_SUMMARY", {
-                "run_id": "run-1",
-                "tokens_in": 100,
-                "tokens_out": 50,
-                "tool_calls": 2,
-                "duration_ms": 5000,
-                "cost_usdc": 1000,
-                "platform_fee_usdc": 0,
-                "delegation_cost_usdc": 0,
-            }),
+            _sse(
+                "USAGE_SUMMARY",
+                {
+                    "run_id": "run-1",
+                    "tokens_in": 100,
+                    "tokens_out": 50,
+                    "tool_calls": 2,
+                    "duration_ms": 5000,
+                    "cost_usdc": 1000,
+                    "platform_fee_usdc": 0,
+                    "delegation_cost_usdc": 0,
+                },
+            ),
             "",
         ]
         events = [e async for e in iter_sse_events(_FakeResponse(lines))]

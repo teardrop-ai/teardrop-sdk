@@ -20,7 +20,6 @@ from teardrop.models import (
 
 from .conftest import _json_response
 
-
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
 
@@ -103,6 +102,7 @@ class TestGetInvoice:
         with pytest.raises(NotFoundError):
             await client.get_invoice("run-missing")
 
+
 class TestGetCreditHistoryOperation:
     async def test_operation_param_forwarded(self, client, mock_http):
         mock_http.get.return_value = _json_response([])
@@ -115,6 +115,7 @@ class TestGetCreditHistoryOperation:
         await client.get_credit_history()
         _, kwargs = mock_http.get.call_args
         assert "operation" not in kwargs["params"]
+
 
 # ─── topup_stripe ─────────────────────────────────────────────────────────────
 
@@ -205,9 +206,7 @@ class TestTopupUsdc:
         assert kwargs["json"]["payment_header"] == "hdr"
 
     async def test_402_raises_payment_required(self, client, mock_http):
-        mock_http.post.return_value = _json_response(
-            {"error": "Insufficient funds"}, status=402
-        )
+        mock_http.post.return_value = _json_response({"error": "Insufficient funds"}, status=402)
         request = UsdcTopupRequest(amount_usdc=1, payment_header="hdr")
         with pytest.raises(PaymentRequiredError):
             await client.topup_usdc(request)

@@ -820,6 +820,89 @@ await client.delete_memory(entry.id)
 
 ---
 
+## Schedules & Event Triggers
+
+Automate agent runs either on a fixed interval or from an external webhook payload. Both surfaces are namespaced off the client as `client.schedules` and `client.event_triggers`.
+
+```python
+from teardrop import (
+    CreateEventTriggerRequest,
+    CreateScheduleRequest,
+    UpdateScheduleRequest,
+)
+
+schedule = await client.schedules.create(CreateScheduleRequest(
+    name="Daily Summary",
+    prompt="Summarize portfolio balances",
+    interval_seconds=86_400,
+    callback_url="https://callback.example.com/schedules",
+))
+
+schedules = await client.schedules.list()
+schedule = await client.schedules.get(schedule.id)
+schedule = await client.schedules.update(
+    schedule.id,
+    UpdateScheduleRequest(enabled=False, callback_url=None),
+)
+runs = await client.schedules.runs(schedule.id, limit=10)
+async for run in client.schedules.runs_iter(schedule.id, limit=100):
+    print(run.status, run.run_id)
+await client.schedules.delete(schedule.id)
+
+trigger = await client.event_triggers.create(CreateEventTriggerRequest(
+    name="On Payment Inbound",
+    prompt="Audit incoming payment of {{amount}} for user {{userId}}. Full tx: {{event_json}}",
+    callback_url="https://callback.example.com/events",
+))
+
+print(trigger.event_path)
+print(trigger.secret)  # store now; only returned on create / rotate
+
+rotation = await client.event_triggers.rotate_secret(trigger.id)
+trigger_runs = await client.event_triggers.runs(trigger.id, limit=10)
+async for run in client.event_triggers.runs_iter(trigger.id, limit=100):
+    print(run.status, run.run_id)
+```
+
+Inbound dispatch is server-to-server and not a client method: your webhook source sends `POST /agent/events/{trigger_token}` with `X-Teardrop-Trigger-Secret` and a JSON body. Persist the secret returned by `create()` or `rotate_secret()` immediately.
+
+When validating signed callback payloads, use the helpers exported by the SDK:
+
+```python
+from teardrop import verify_webhook
+
+if not verify_webhook(raw_payload_bytes, signature_header, secret):
+    raise PermissionError("invalid webhook signature")
+```
+
+Example callback handler (FastAPI):
+
+```python
+from fastapi import FastAPI, Header, HTTPException, Request
+from teardrop import verify_webhook
+
+app = FastAPI()
+TEARDROP_SECRET = "whsec_from_trigger_create_or_rotate"
+
+
+@app.post("/teardrop/event")
+async def teardrop_event(
+    request: Request,
+    x_teardrop_trigger_secret: str | None = Header(default=None),
+):
+    payload = await request.body()
+    signature = x_teardrop_trigger_secret or ""
+
+    if not verify_webhook(payload, signature, TEARDROP_SECRET):
+        raise HTTPException(status_code=401, detail="invalid signature")
+
+    event = await request.json()
+    # Use event values inside your prompt template, e.g. {{event_json}}, {{amount}}, etc.
+    return {"ok": True, "event_id": event.get("id")}
+```
+
+---
+
 ## A2A Delegation
 
 Allow other organisations' agents to call your agent on behalf of their users.
@@ -898,6 +981,8 @@ All request/response types are Pydantic v2 models exported from `teardrop`.
 | `UsdcTopupRequirements`, `UsdcTopupRequest` | `get_usdc_topup_requirements()`, `topup_usdc()` |
 | `UsageSummary` | `get_usage()` |
 | `OrgLlmConfig`, `SetLlmConfigRequest`, `ProviderType`, `RoutingPreference` | LLM config CRUD |
+| `CreateScheduleRequest`, `ScheduledRun`, `ScheduledRunResult`, `ScheduledRunsPage`, `UpdateScheduleRequest` | `client.schedules.*` |
+| `CreateEventTriggerRequest`, `EventTrigger`, `EventTriggerWithSecret`, `UpdateEventTriggerRequest` | `client.event_triggers.*` |
 | `ModelBenchmarksResponse`, `ModelInfo`, `ModelPricing`, `ModelRunBenchmarks` | `get_model_benchmarks()`, `get_org_model_benchmarks()` |
 | `Wallet`, `LinkWalletRequest` | `get_wallets()`, `link_wallet()` |
 | `AgentCard` | `get_agent_card()` |
