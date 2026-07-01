@@ -1,9 +1,9 @@
-"""SSE stream parser for Teardrop /agent/run responses."""
+"""SSE stream parsing for Teardrop /agent/run responses."""
 
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncIterator, Literal, TypedDict
+from typing import Any, AsyncIterator
 
 import httpx
 
@@ -38,10 +38,10 @@ def _build_event(
         data: {"event": "<type>", "data": { ... }}\n\n
 
     The ``event:`` SSE framing field is NOT used by the backend; the event
-    type is embedded inside the JSON payload.  The ``sse_event_type`` parameter
+    type is embedded inside the JSON payload. The ``sse_event_type`` parameter
     is kept as a fallback for streams that do use the SSE framing field.
 
-    Uses ``model_construct`` to bypass Pydantic field validation — safe because
+    Uses ``model_construct`` to bypass Pydantic field validation - safe because
     all values originate from the SDK's own parser, not user input.
     """
     data: dict[str, Any] = {}
@@ -84,7 +84,7 @@ async def iter_sse_events(response: httpx.Response) -> AsyncIterator[SSEEvent]:
         data: {"key": "value"}\n
         \n
 
-    Yields one ``SSEEvent`` per complete event block.  Ignores ``:`` comment
+    Yields one ``SSEEvent`` per complete event block. Ignores ``:`` comment
     lines (SSE heartbeats).
     """
     event_type: str = ""
@@ -97,7 +97,7 @@ async def iter_sse_events(response: httpx.Response) -> AsyncIterator[SSEEvent]:
         line = raw_line.rstrip("\r\n")
 
         if line.startswith(":"):
-            # SSE comment / heartbeat — ignore per spec.
+            # SSE comment / heartbeat - ignore per spec.
             continue
         elif line.startswith("event:"):
             event_type = line[6:].lstrip(" ")
@@ -131,116 +131,9 @@ def collect_text(events: list[SSEEvent]) -> str:
 
 
 async def async_collect_text(events: AsyncIterator[SSEEvent]) -> str:
-    """Async version of ``collect_text``: drain an async SSE event stream and
-    return the concatenated TEXT_MESSAGE_CONTENT deltas as a string.
-    """
+    """Drain an async SSE event stream and return concatenated deltas."""
     parts: list[str] = []
     async for event in events:
         if event.type == EVENT_TEXT_MSG_CONTENT:
             parts.append(event.data.get("delta", ""))
     return "".join(parts)
-
-
-# ─── MCP tool name utilities ──────────────────────────────────────────────────
-
-_MCP_SEPARATOR = "__"
-
-
-class _McpToolMatch(TypedDict):
-    is_mcp: Literal[True]
-    server: str
-    tool: str
-
-
-class _McpToolNoMatch(TypedDict):
-    is_mcp: Literal[False]
-
-
-def parse_mcp_tool_name(tool_name: str) -> _McpToolMatch | _McpToolNoMatch:
-    """Split an MCP-namespaced tool name into server and tool components.
-
-    MCP server tools use a double-underscore separator::
-
-        "{server_name}__{mcp_tool_name}"
-
-    A single underscore is NOT a separator — it may appear in both the server
-    name and the tool name.
-
-    Returns a dict with ``is_mcp=True, server=..., tool=...`` when the
-    separator is found at a non-zero position, or ``{"is_mcp": False}`` for
-    global / org webhook tools.
-
-    Examples::
-
-        parse_mcp_tool_name("my_server__web_search")
-        # → {"is_mcp": True, "server": "my_server", "tool": "web_search"}
-
-        parse_mcp_tool_name("web_search")
-        # → {"is_mcp": False}
-    """
-    idx = tool_name.find(_MCP_SEPARATOR)
-    if idx > 0:
-        return {
-            "is_mcp": True,
-            "server": tool_name[:idx],
-            "tool": tool_name[idx + len(_MCP_SEPARATOR) :],
-        }
-    return {"is_mcp": False}
-
-
-# ─── Marketplace tool name utilities ──────────────────────────────────────────
-
-_MARKETPLACE_SEPARATOR = "/"
-
-
-def parse_marketplace_tool_name(qualified_name: str) -> dict[str, str]:
-    """Parse a qualified marketplace tool name into its components.
-
-    Marketplace tools use ``org_slug/tool_name`` format.
-
-    Returns a dict with ``org_slug`` and ``tool_name``.
-
-    Raises:
-        :exc:`ValueError`: If the name does not contain a ``/`` separator.
-
-    Examples::
-
-        parse_marketplace_tool_name("acme/web_search")
-        # → {"org_slug": "acme", "tool_name": "web_search"}
-    """
-    idx = qualified_name.find(_MARKETPLACE_SEPARATOR)
-    if idx <= 0:
-        raise ValueError(
-            f"Invalid qualified tool name {qualified_name!r}: expected 'org_slug/tool_name' format"
-        )
-    return {
-        "org_slug": qualified_name[:idx],
-        "tool_name": qualified_name[idx + 1 :],
-    }
-
-
-# ─── USDC formatting helpers ─────────────────────────────────────────────────
-
-_USDC_DECIMALS = 6
-
-
-def format_usdc(atomic: int) -> str:
-    """Convert atomic USDC (6 decimals) to human-readable dollar string.
-
-    Examples::
-
-        format_usdc(1_500_000)  # → "1.500000"
-        format_usdc(50)         # → "0.000050"
-    """
-    return f"{atomic / 10**_USDC_DECIMALS:.{_USDC_DECIMALS}f}"
-
-
-def parse_usdc(dollars: str | float) -> int:
-    """Convert a dollar amount to atomic USDC (6 decimals).
-
-    Examples::
-
-        parse_usdc("1.50")  # → 1_500_000
-        parse_usdc(0.25)    # → 250_000
-    """
-    return int(round(float(dollars) * 10**_USDC_DECIMALS))
