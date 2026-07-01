@@ -106,7 +106,6 @@ class SchedulesModule:
             next_cursor = page.next_cursor
 
 
-
 class _SyncSchedulesModule:
     def __init__(self, client: TeardropClient) -> None:
         self._c = client
