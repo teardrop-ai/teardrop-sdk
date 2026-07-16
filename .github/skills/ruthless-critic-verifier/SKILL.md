@@ -81,4 +81,5 @@ When reviewing changes to this SDK, do not assign High confidence until these ar
 - [ ] Tests still patch `teardrop.client.httpx.AsyncClient` where applicable — `httpx` must stay exposed on the `teardrop.client` barrel.
 - [ ] `ruff check` and `ruff format --check` pass; pytest passes via the project virtualenv (`venv\Scripts\python -m pytest`, not a global/system Python).
 - [ ] If the change touches a real endpoint's shape, consider whether `tests/integration/` smoke tests need a matching update (they run against a live deployment, gated by `TEARDROP_TEST_URL`/`EMAIL`/`SECRET`).
-- [ ] Claimed API "gaps" or "not implemented" notes are reproduced against current client code, not assumed from `notes/03_SDK_HANDOFF.md` alone (that doc targets a different, TS-based SDK build).
+- [ ] Claimed API "gaps" or "not implemented" notes are reproduced against current client code and `spec/openapi.json`/`spec/events.schema.json`, not assumed from `docs/*.md` prose alone.
+- [ ] If public behavior changed, the matching `docs/<topic>.md` file was updated (not just `README.md`, which is now only a Quick Start + documentation index) — check the Documentation table in [README.md](README.md) for the right target file.

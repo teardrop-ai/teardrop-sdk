@@ -26,7 +26,8 @@ Use existing repo skills instead of recreating them:
 - Keep the user as the decision maker. Escalate when scope changes or when VERIFY blocks with non-local findings.
 - Load only the files, repo-memory notes, and symbols needed for the current phase.
 - Treat live repo code as primary truth. Treat `/memories/repo/` as secondary and verify before relying on it.
-- Treat `notes/03_SDK_HANDOFF.md` as documentation of the remote API contract, not of this repo's own code — it was written for a different (TypeScript) SDK build, so verify names/shapes against this repo's client and models before trusting it.
+- Treat `spec/openapi.json` and `spec/events.schema.json` as the authoritative remote API contract, not of this repo's own code — verify names/shapes against this repo's client and models (snake_case) before trusting any spec detail, since the spec is JSON-schema, not prose.
+- Treat `README.md` as a lightweight index (Quick Start + links); the actual usage documentation for each feature domain lives under `docs/*.md` — update the matching `docs/<topic>.md` file for behavior changes, and only touch `README.md` if a new topic/file is introduced (add a row to its documentation table).
 - Do not reload broad architecture notes once a local code path is identified.
 - Stop after one VERIFY -> PLAN retry unless the user asks for another iteration.
 
@@ -72,7 +73,7 @@ Purpose: gather only the evidence needed to make a correct plan.
 
 Use `deep-researcher` when:
 - the behavior crosses the async/sync boundary or multiple client mixins
-- repo memory or `notes/03_SDK_HANDOFF.md` makes a claim that needs checking against live code
+- repo memory or `docs/*.md` makes a claim that needs checking against live code or `spec/openapi.json`
 - external docs (httpx, pydantic, JWT/SIWE specs) are required
 
 Actions:
