@@ -1,0 +1,102 @@
+name: Spec Update Trigger
+
+on:
+  repository_dispatch:
+    types: [backend_spec_updated]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-spec:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout SDK Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # Preserve the previously-synced openapi.json (if any) before it gets
+      # overwritten below, so we can diff old vs. new at the type level.
+      - name: Snapshot previous spec (for diffing)
+        run: cp spec/openapi.json /tmp/openapi.old.json 2>/dev/null || true
+
+      # Fetch specs from the private backend repo using a read-scoped PAT
+      # (raw.githubusercontent.com supports Bearer auth for private repos)
+      - name: Download Latest Spec Manifests
+        run: |
+          mkdir -p spec
+          curl -sSf -H "Authorization: Bearer ${{ secrets.TEARDROP_SPEC_READ_TOKEN }}" \
+            -o spec/openapi.json \
+            https://raw.githubusercontent.com/${{ github.repository_owner }}/teardrop/main/spec/openapi.json
+          curl -sSf -H "Authorization: Bearer ${{ secrets.TEARDROP_SPEC_READ_TOKEN }}" \
+            -o spec/events.schema.json \
+            https://raw.githubusercontent.com/${{ github.repository_owner }}/teardrop/main/spec/events.schema.json
+
+      - name: Check for spec changes
+        id: diff
+        run: |
+          git add -N spec/
+          git diff --quiet -- spec/ && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # Informational only — best-effort type-level diff of openapi.json to make
+      # the PR easier to review than a raw JSON diff. Never allowed to fail the
+      # job; events.schema.json is skipped since its plain JSON diff is already
+      # readable (Pydantic-derived, clean field names, per-event dict shape).
+      - name: Generate readable type-level diff (informational only)
+        id: typediff
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          pip install --quiet datamodel-code-generator
+          if [ -s /tmp/openapi.old.json ]; then
+            datamodel-codegen --input /tmp/openapi.old.json --input-file-type openapi --output /tmp/old_models.py 2>/dev/null || echo "" > /tmp/old_models.py
+          else
+            echo "" > /tmp/old_models.py
+          fi
+          datamodel-codegen --input spec/openapi.json --input-file-type openapi --output /tmp/new_models.py 2>/dev/null || echo "" > /tmp/new_models.py
+          diff -u /tmp/old_models.py /tmp/new_models.py | head -200 > /tmp/models.diff || true
+          DELIMITER="EOF_$(date +%s)_$RANDOM"
+          {
+            echo "diff<<$DELIMITER"
+            cat /tmp/models.diff
+            echo "$DELIMITER"
+          } >> "$GITHUB_OUTPUT"
+
+      # NOTE: no codegen step wired into src/ yet — the client models are
+      # hand-written. This PR surfaces the spec diff for a human/agent to
+      # manually update client code against, until a real
+      # datamodel-code-generator pipeline exists in this repo.
+      - name: Create Pull Request with Spec Diff
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: sync spec/ from Teardrop backend"
+          title: "🤖 chore(spec): backend spec changed — manual SDK update needed"
+          body: |
+            The Teardrop backend's `spec/openapi.json` and/or `spec/events.schema.json`
+            changed on `main`. This repo has no codegen pipeline yet, so the SDK's
+            hand-written models/resources must be updated by hand against the diff
+            in this PR.
+
+            <details>
+            <summary>Type-level diff of openapi.json (informational, capped at 200 lines)</summary>
+
+            ```diff
+            ${{ steps.typediff.outputs.diff }}
+            ```
+
+            </details>
+
+            **Review checklist:**
+            - [ ] Re-check hand-curated docstrings/field validators in models
+                  (e.g. `sub` vs `user_id`, `org_name` resolution) — a type diff
+                  won't flag these.
+            - [ ] Update affected resource classes and their tests.
+            - [ ] Confirm `events.schema.json` changes (see file diff in this PR)
+                  are reflected in event-trigger models/handlers.
+          branch: "actions/spec-update"
