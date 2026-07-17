@@ -67,6 +67,22 @@ print(f"Invite URL: {invite['invite_url']}")
 
 *Note: Attempting to invite with `role="admin"` will return a 422 error from the API.*
 
+## Org M2M Credentials
+
+List or rotate the organization's machine-to-machine `client_id`/`client_secret`
+pairs (used with the `client_id=..., client_secret=...` constructor mode).
+
+```python
+creds = await client.get_org_credentials()
+for c in creds:
+    print(c.client_id, c.created_at)  # secrets are never returned after creation
+
+# Admin-only: deletes every existing credential for the org and issues a new
+# pair. The new client_secret is returned exactly once — store it immediately.
+rotated = await client.regenerate_org_credentials()
+print(rotated.client_id, rotated.client_secret)
+```
+
 ## Live Tool Discovery
 
 List all tools available to the current agent, including their source and access status.

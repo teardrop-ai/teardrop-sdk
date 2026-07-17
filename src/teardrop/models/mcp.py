@@ -90,11 +90,22 @@ class DiscoverMcpToolsResponse(BaseModel):
 McpDiscoverResponse = DiscoverMcpToolsResponse
 
 
+class TestMcpToolRequest(BaseModel):
+    """Request body for POST /mcp/servers/{server_id}/test-tool."""
+
+    tool_name: str = Field(
+        ..., min_length=1, max_length=128, description="Raw upstream MCP tool name."
+    )
+    args: dict[str, Any] = Field(default_factory=dict, description="Arguments to pass to the tool.")
+
+
 class TestMcpToolResponse(BaseModel):
     """Response from POST /mcp/servers/{server_id}/test-tool."""
 
     success: bool
+    latency_ms: int | None = None
+    result: dict[str, Any] | None = None
     output: dict[str, Any] = Field(default_factory=dict)
-    error: str = ""
+    error: str | None = None
 
     model_config = {"extra": "allow"}

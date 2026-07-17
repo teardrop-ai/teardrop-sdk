@@ -34,6 +34,22 @@ for tool in discovery.tools:
 await client.delete_mcp_server(server.id)
 ```
 
+## Testing a Tool Before Publishing
+
+Fire a single diagnostic call against a live MCP tool — unbilled, does not
+write to the audit trail, and bypasses the circuit breaker. Used by the
+dashboard wizard before an author publishes a tool to the marketplace (see
+[Marketplace Import](marketplace.md#importing-tools-from-an-mcp-server)).
+
+```python
+from teardrop.models import TestMcpToolRequest
+
+result = await client.test_mcp_tool(
+    server.id, TestMcpToolRequest(tool_name="search", args={"query": "hello"})
+)
+# → TestMcpToolResponse(success=True, latency_ms=..., result={...}, error=None)
+```
+
 ## MCP Tool Names in Events
 
 ```python

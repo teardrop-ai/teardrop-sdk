@@ -603,6 +603,97 @@ class TestGetAgentTools:
         assert result == []
 
 
+class TestToolExclusions:
+    """Tests for client.list_tool_exclusions()/create_tool_exclusion()/delete_tool_exclusion()."""
+
+    @pytest.mark.asyncio
+    async def test_list_returns_response_model(self, client, mock_http):
+        from teardrop.models import ToolExclusionsResponse
+
+        mock_http.get.return_value = _json_response({"tool_names": ["web_search", "web_scrape"]})
+        result = await client.list_tool_exclusions()
+        assert isinstance(result, ToolExclusionsResponse)
+        assert result.tool_names == ["web_search", "web_scrape"]
+
+    @pytest.mark.asyncio
+    async def test_create_returns_response_model_and_sends_body(self, client, mock_http):
+        from teardrop.models import ToolExclusionCreateResponse, ToolExclusionRequest
+
+        mock_http.post.return_value = _json_response({"status": "added", "tool_name": "web_search"})
+        result = await client.create_tool_exclusion(ToolExclusionRequest(tool_name="web_search"))
+        assert isinstance(result, ToolExclusionCreateResponse)
+        assert result.status == "added"
+        assert result.tool_name == "web_search"
+
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/agent/tool-exclusions"
+        assert kwargs["json"] == {"tool_name": "web_search"}
+
+    @pytest.mark.asyncio
+    async def test_delete_calls_expected_url(self, client, mock_http):
+        mock_http.delete.return_value = _json_response({})
+        result = await client.delete_tool_exclusion("web_search")
+        assert result is None
+        args, _ = mock_http.delete.call_args
+        assert args[0] == "http://test/agent/tool-exclusions/web_search"
+
+
+class TestAgentDecisionsAndOutcome:
+    """Tests for client.get_agent_decisions()/set_run_outcome()."""
+
+    @pytest.mark.asyncio
+    async def test_get_agent_decisions_parses_response(self, client, mock_http):
+        from teardrop.models import AgentDecisionsResponse
+
+        mock_http.get.return_value = _json_response(
+            {
+                "items": [
+                    {
+                        "id": "dec-abc",
+                        "run_id": "run-xyz",
+                        "task_class": "research_summary",
+                        "action": "execute_tool",
+                        "reasoning": "Determined that search results are needed to answer.",
+                        "confidence": 0.94,
+                        "tool_names": ["web_search"],
+                        "outcome": 1,
+                        "outcome_source": "feedback",
+                        "created_at": "2026-07-16T12:00:00.000000",
+                    }
+                ],
+                "next_cursor": "2026-07-16T12:00:00.000000",
+            }
+        )
+        result = await client.get_agent_decisions(limit=10, cursor="abc")
+        assert isinstance(result, AgentDecisionsResponse)
+        assert result.items[0].id == "dec-abc"
+        assert result.items[0].confidence == 0.94
+        assert result.next_cursor == "2026-07-16T12:00:00.000000"
+
+        args, kwargs = mock_http.get.call_args
+        assert args[0] == "http://test/agent/decisions"
+        assert kwargs["params"] == {"limit": 10, "cursor": "abc"}
+
+    @pytest.mark.asyncio
+    async def test_set_run_outcome_sends_rating(self, client, mock_http):
+        from teardrop.models import RunOutcomeRequest
+
+        mock_http.patch.return_value = _json_response({"run_id": "run-1", "rating": 1})
+        await client.set_run_outcome("run-1", RunOutcomeRequest(rating=1))
+        args, kwargs = mock_http.patch.call_args
+        assert args[0] == "http://test/agent/runs/run-1/outcome"
+        assert kwargs["json"] == {"rating": 1}
+
+    @pytest.mark.asyncio
+    async def test_set_run_outcome_404_raises_not_found(self, client, mock_http):
+        from teardrop.exceptions import NotFoundError
+        from teardrop.models import RunOutcomeRequest
+
+        mock_http.patch.return_value = _json_response({"detail": "Already labeled"}, status=404)
+        with pytest.raises(NotFoundError):
+            await client.set_run_outcome("run-1", RunOutcomeRequest(rating=1))
+
+
 class TestRunWithToolPolicy:
     """Tests that tool_policy is serialized into the agent run request."""
 

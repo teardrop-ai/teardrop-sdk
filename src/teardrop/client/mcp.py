@@ -9,6 +9,7 @@ from teardrop.models import (
     DiscoverMcpToolsResponse,
     McpServerDeletedResponse,
     McpServerResponse,
+    TestMcpToolRequest,
     TestMcpToolResponse,
     UpdateMcpServerRequest,
 )
@@ -74,13 +75,17 @@ class _McpMixin:
     async def test_mcp_tool(
         self,
         server_id: str,
-        tool_name: str,
-        arguments: dict[str, Any],
+        request_or_tool_name: TestMcpToolRequest | str,
+        arguments: dict[str, Any] | None = None,
     ) -> TestMcpToolResponse:
         http = await self._get_http()
+        if isinstance(request_or_tool_name, TestMcpToolRequest):
+            body = request_or_tool_name.model_dump(exclude_none=True)
+        else:
+            body = {"tool_name": request_or_tool_name, "arguments": arguments or {}}
         resp = await http.post(
             f"{self._base_url}/mcp/servers/{server_id}/test-tool",
-            json={"tool_name": tool_name, "arguments": arguments},
+            json=body,
             headers=await self._headers(),
         )
         self._raise_for_status(resp)

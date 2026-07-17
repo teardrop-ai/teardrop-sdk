@@ -37,6 +37,43 @@ async for event in client.run("Hello!", tool_policy=policy):
 - Custom webhook tools registered in your org (see [Custom Webhook Tools](custom-tools.md))
 - MCP servers you've registered (see [MCP Servers](mcp-servers.md))
 
+## Persistent Tool Exclusions
+
+`tool_policy` above only applies to a single `run()` call. To persistently
+block a tool for every future run by the org (until removed), use the
+tool-exclusion endpoints instead:
+
+```python
+from teardrop.models import ToolExclusionRequest
+
+await client.create_tool_exclusion(ToolExclusionRequest(tool_name="web_search"))
+
+exclusions = await client.list_tool_exclusions()  # ToolExclusionsResponse
+for tool_name in exclusions.tool_names:
+    print(tool_name)
+
+await client.delete_tool_exclusion("web_search")
+```
+
+## Decision Graph & Run Outcomes
+
+Every completed run is summarized asynchronously into a decision record
+(action taken, reasoning, tools used). List them and label the ground-truth
+outcome of a past run to feed the decision graph:
+
+```python
+from teardrop.models import RunOutcomeRequest
+
+page = await client.get_agent_decisions(limit=50)  # AgentDecisionsResponse
+for item in page.items:
+    print(item.run_id, item.action, item.reasoning)
+
+# Label a past run's outcome once (-1 bad, 0 neutral, 1 good).
+# The run must belong to the caller's own invoice history; relabeling an
+# already-labeled run returns a 404.
+await client.set_run_outcome("run-abc123", RunOutcomeRequest(rating=1))
+```
+
 ## Passing Context
 
 ```python
