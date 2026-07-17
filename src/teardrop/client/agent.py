@@ -13,6 +13,7 @@ from teardrop.models import (
     AgentToolsResponse,
     EventDispatchResponse,
     RunOutcomeRequest,
+    RunOutcomeResponse,
     SSEEvent,
     ToolExclusionActionResponse,
     ToolExclusionCreateResponse,
@@ -98,28 +99,16 @@ class _AgentMixin:
     async def set_run_outcome(
         self,
         run_id: str,
-        request: RunOutcomeRequest | None = None,
-        *,
-        outcome: str | None = None,
-        summary: str | None = None,
-    ) -> dict[str, Any]:
-        if request is not None:
-            return await self._set_run_outcome_with_request(run_id, request)
-
-        if outcome is None:
-            raise TypeError("outcome is required when request is not provided")
-
+        request: RunOutcomeRequest,
+    ) -> RunOutcomeResponse:
         http = await self._get_http()
-        body: dict[str, Any] = {"outcome": outcome}
-        if summary is not None:
-            body["summary"] = summary
         resp = await http.patch(
             f"{self._base_url}/agent/runs/{run_id}/outcome",
-            json=body,
+            json=request.model_dump(exclude_none=True),
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return resp.json()
+        return RunOutcomeResponse.model_validate(resp.json())
 
     async def dispatch_event(
         self, trigger_token: str, event_json: dict[str, Any]
@@ -207,15 +196,3 @@ class _AgentMixin:
         )
         self._raise_for_status(resp)
         return AgentDecisionsResponse.model_validate(resp.json())
-
-    async def _set_run_outcome_with_request(
-        self, run_id: str, request: RunOutcomeRequest
-    ) -> dict[str, Any]:
-        http = await self._get_http()
-        resp = await http.patch(
-            f"{self._base_url}/agent/runs/{run_id}/outcome",
-            json=request.model_dump(exclude_none=True),
-            headers=await self._headers(),
-        )
-        self._raise_for_status(resp)
-        return resp.json()

@@ -80,9 +80,14 @@ class AgentDecisionRecord(BaseModel):
 
     id: str
     run_id: str
-    tool_name: str
-    decision: str
-    created_at: str = ""
+    outcome: int = Field(..., ge=-1, le=1)
+    created_at: str
+    action: str = ""
+    confidence: float | None = None
+    outcome_source: str = ""
+    reasoning: str = ""
+    task_class: str = ""
+    tool_names: list[str] = Field(default_factory=list)
 
     model_config = {"extra": "allow"}
 
@@ -97,11 +102,7 @@ class AgentDecisionListResponse(BaseModel):
 class RunOutcomeResponse(BaseModel):
     """Response from PATCH /agent/runs/{run_id}/outcome."""
 
-    run_id: str
-    outcome: str
-    updated_at: str = ""
-
-    model_config = {"extra": "allow"}
+    status: Literal["recorded"]
 
 
 class DecisionRecord(BaseModel):
@@ -122,7 +123,7 @@ class DecisionRecord(BaseModel):
 class AgentDecisionsResponse(BaseModel):
     """Paginated list of decision-graph records."""
 
-    items: list[DecisionRecord] = Field(default_factory=list)
+    items: list[AgentDecisionRecord] = Field(default_factory=list)
     next_cursor: str | None = None
 
 
@@ -138,38 +139,32 @@ class EventDispatchResponse(BaseModel):
 class ToolExclusionListResponse(BaseModel):
     """Response from GET /agent/tool-exclusions."""
 
-    exclusions: list[str] = Field(default_factory=list)
-
-
-class ToolExclusionsResponse(BaseModel):
-    """Response from GET /agent/tool-exclusions."""
-
     tool_names: list[str] = Field(default_factory=list)
+
+
+class ToolExclusionsResponse(ToolExclusionListResponse):
+    """Response from GET /agent/tool-exclusions."""
 
 
 class ToolExclusionActionResponse(BaseModel):
     """Response from POST /agent/tool-exclusions."""
 
+    status: Literal["added"]
     tool_name: str
-    excluded: bool
-
-    model_config = {"extra": "allow"}
 
 
 class ToolExclusionCreateResponse(BaseModel):
     """Response from POST /agent/tool-exclusions."""
 
-    status: str = "added"
+    status: Literal["added"]
     tool_name: str
 
 
 class ToolExclusionRemovedResponse(BaseModel):
     """Response from DELETE /agent/tool-exclusions/{tool_name}."""
 
+    status: Literal["removed"]
     tool_name: str
-    removed: bool
-
-    model_config = {"extra": "allow"}
 
 
 class TestWebhookResponse(BaseModel):

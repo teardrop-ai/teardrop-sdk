@@ -2,23 +2,26 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, RootModel
 
 
 class OrgCredentialsEntry(BaseModel):
     """A single M2M credential entry (secret is never returned)."""
 
     client_id: str
-    created_at: str = ""
+    created_at: str
 
 
 OrgCredentialItem = OrgCredentialsEntry
 
 
-class OrgCredentialsResponse(BaseModel):
+class OrgCredentialsResponse(RootModel[list[OrgCredentialsEntry]]):
     """Response from GET /org/credentials."""
 
-    credentials: list[OrgCredentialsEntry] = Field(default_factory=list)
+    @property
+    def credentials(self) -> list[OrgCredentialsEntry]:
+        """Return the bare-array response under its legacy attribute name."""
+        return self.root
 
 
 class RegenerateCredentialsResponse(BaseModel):
@@ -26,7 +29,7 @@ class RegenerateCredentialsResponse(BaseModel):
 
     client_id: str
     client_secret: str
-    created_at: str = ""
+    created_at: str
 
 
 OrgCredentialRegenerateResponse = RegenerateCredentialsResponse
@@ -36,9 +39,9 @@ class OrgSpendingConfigResponse(BaseModel):
     """Response from GET/PATCH /admin/orgs/{org_id}/spending."""
 
     org_id: str
-    daily_limit_usdc: int | None = None
-    monthly_limit_usdc: int | None = None
-    hard_limit_usdc: int | None = None
-    updated_at: str = ""
+    balance_usdc: int
+    spending_limit_usdc: int
+    is_paused: bool
+    daily_spend_usdc: int
 
     model_config = {"extra": "allow"}

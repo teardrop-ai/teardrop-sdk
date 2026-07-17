@@ -146,6 +146,23 @@ class TestRun:
         assert kwargs["params"]["end"] == "2026-01-31"
 
     @pytest.mark.asyncio
+    async def test_legacy_admin_usage_method_warns_and_forwards(self):
+        client = AsyncTeardropClient("http://test", token="tok.en.sig")
+        mock = AsyncMock()
+        mock.is_closed = False
+        mock.get.return_value = _json_response({"total_runs": 1})
+        client._http = mock
+        with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+            with pytest.warns(DeprecationWarning, match="AsyncAdminTeardropClient"):
+                result = await client.get_admin_usage_org(
+                    "org-1", start="2026-01-01", end="2026-01-31"
+                )
+        assert isinstance(result, UsageSummary)
+        args, kwargs = mock.get.call_args
+        assert args[0] == "http://test/admin/usage/org/org-1"
+        assert kwargs["params"] == {"start": "2026-01-01", "end": "2026-01-31"}
+
+    @pytest.mark.asyncio
     async def test_run_message_too_long_raises(self):
         """AgentRunRequest enforces max_length=4096 before any HTTP call."""
         from pydantic import ValidationError
@@ -607,6 +624,15 @@ class TestToolExclusions:
     """Tests for client.list_tool_exclusions()/create_tool_exclusion()/delete_tool_exclusion()."""
 
     @pytest.mark.asyncio
+    async def test_get_returns_spec_response_model(self, client, mock_http):
+        from teardrop.models import ToolExclusionListResponse
+
+        mock_http.get.return_value = _json_response({"tool_names": ["web_search"]})
+        result = await client.get_tool_exclusions()
+        assert isinstance(result, ToolExclusionListResponse)
+        assert result.tool_names == ["web_search"]
+
+    @pytest.mark.asyncio
     async def test_list_returns_response_model(self, client, mock_http):
         from teardrop.models import ToolExclusionsResponse
 
@@ -678,8 +704,9 @@ class TestAgentDecisionsAndOutcome:
     async def test_set_run_outcome_sends_rating(self, client, mock_http):
         from teardrop.models import RunOutcomeRequest
 
-        mock_http.patch.return_value = _json_response({"run_id": "run-1", "rating": 1})
-        await client.set_run_outcome("run-1", RunOutcomeRequest(rating=1))
+        mock_http.patch.return_value = _json_response({"status": "recorded"})
+        result = await client.set_run_outcome("run-1", RunOutcomeRequest(rating=1))
+        assert result.status == "recorded"
         args, kwargs = mock_http.patch.call_args
         assert args[0] == "http://test/agent/runs/run-1/outcome"
         assert kwargs["json"] == {"rating": 1}
@@ -692,6 +719,42 @@ class TestAgentDecisionsAndOutcome:
         mock_http.patch.return_value = _json_response({"detail": "Already labeled"}, status=404)
         with pytest.raises(NotFoundError):
             await client.set_run_outcome("run-1", RunOutcomeRequest(rating=1))
+
+
+class TestOrgCredentials:
+    @pytest.mark.asyncio
+    async def test_get_org_credentials_parses_bare_array(self, client, mock_http):
+        from teardrop.models import OrgCredentialItem
+
+        mock_http.get.return_value = _json_response(
+            [{"client_id": "client-1", "created_at": "2026-07-17T00:00:00Z"}]
+        )
+        result = await client.get_org_credentials()
+        assert len(result) == 1
+        assert isinstance(result[0], OrgCredentialItem)
+        assert result[0].client_id == "client-1"
+        args, kwargs = mock_http.get.call_args
+        assert args[0] == "http://test/org/credentials"
+        assert "headers" in kwargs
+
+    @pytest.mark.asyncio
+    async def test_regenerate_org_credentials_returns_secret_once(self, client, mock_http):
+        from teardrop.models import RegenerateCredentialsResponse
+
+        mock_http.post.return_value = _json_response(
+            {
+                "client_id": "client-2",
+                "client_secret": "secret-once",
+                "created_at": "2026-07-17T00:00:00Z",
+            },
+            status=201,
+        )
+        result = await client.regenerate_org_credentials()
+        assert isinstance(result, RegenerateCredentialsResponse)
+        assert result.client_secret == "secret-once"
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/org/credentials/regenerate"
+        assert "headers" in kwargs
 
 
 class TestRunWithToolPolicy:

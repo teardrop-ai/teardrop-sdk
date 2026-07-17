@@ -95,17 +95,13 @@ class TestCreateMemory:
 
 class TestDeleteMemory:
     async def test_returns_deleted_response(self, client, mock_http):
-        mock_http.delete.return_value = _json_response(
-            {"id": "m-1", "deleted_at": "2026-01-01T00:00:00Z"}
-        )
+        mock_http.delete.return_value = _json_response({"status": "deleted"})
         result = await client.delete_memory("m-1")
         assert isinstance(result, MemoryDeletedResponse)
-        assert result.id == "m-1"
+        assert result.status == "deleted"
 
     async def test_correct_url(self, client, mock_http):
-        mock_http.delete.return_value = _json_response(
-            {"id": "m-abc", "deleted_at": "2026-01-01T00:00:00Z"}
-        )
+        mock_http.delete.return_value = _json_response({"status": "deleted"})
         await client.delete_memory("m-abc")
         args, _ = mock_http.delete.call_args
         assert args[0] == "http://test/memories/m-abc"

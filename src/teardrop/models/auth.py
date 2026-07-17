@@ -86,6 +86,7 @@ class CreateUserResponse(BaseModel):
     id: str
     email: str
     org_id: str
+    role: str
     created_at: str = ""
 
     model_config = {"extra": "allow"}
@@ -106,6 +107,7 @@ class CreateClientCredentialsResponse(BaseModel):
 
     client_id: str
     client_secret: str
-    created_at: str = ""
+    org_id: str
+    created_at: str
 
     model_config = {"extra": "allow"}

@@ -2,6 +2,8 @@
 
 import httpx
 
+from teardrop.client._admin_async import AsyncAdminTeardropClient
+from teardrop.client._admin_sync import AdminTeardropClient
 from teardrop.client._async import AsyncTeardropClient
 from teardrop.client._core import (
     _AGENT_CARD_MAX_BYTES,
@@ -18,6 +20,8 @@ from teardrop.client.event_triggers import EventTriggersModule, _SyncEventTrigge
 from teardrop.client.schedules import SchedulesModule, _SyncSchedulesModule
 
 AsyncTeardropClient.__module__ = __name__
+AsyncAdminTeardropClient.__module__ = __name__
+AdminTeardropClient.__module__ = __name__
 TeardropClient.__module__ = __name__
 SchedulesModule.__module__ = __name__
 EventTriggersModule.__module__ = __name__
@@ -27,6 +31,8 @@ _HttpProxy.__module__ = __name__
 
 __all__ = [
     "AsyncTeardropClient",
+    "AsyncAdminTeardropClient",
+    "AdminTeardropClient",
     "TeardropClient",
     "SchedulesModule",
     "EventTriggersModule",

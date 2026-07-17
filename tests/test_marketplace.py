@@ -11,9 +11,14 @@ from teardrop.exceptions import NotFoundError
 from teardrop.models import (
     AuthorConfig,
     EarningsEntry,
+    MarketplaceAuthorProfileResponse,
     MarketplaceBalanceResponse,
+    MarketplaceCatalogDetailResponse,
     MarketplaceCatalogResponse,
     MarketplaceEarningsResponse,
+    MarketplaceImportPreviewResponse,
+    MarketplaceImportPublishResponse,
+    MarketplaceImportPublishToolRequest,
     MarketplaceSubscription,
     MarketplaceSubscriptionListResponse,
     MarketplaceTool,
@@ -77,6 +82,25 @@ _SUBSCRIPTION = {
     "qualified_tool_name": "acme/search",
     "is_active": True,
     "subscribed_at": "2026-01-01T00:00:00Z",
+}
+
+_SUMMARY = {
+    "name": "search",
+    "qualified_name": "acme/search",
+    "tool_name": "search",
+    "display_name": "Search",
+    "description": "Search the web",
+    "short_description": "Web search",
+    "input_schema": {},
+    "cost_usdc": 100,
+    "tool_type": "webhook",
+    "category": "search",
+    "total_calls": 12,
+    "reputation_score": 0.9,
+    "health_status": "healthy",
+    "is_healthy": True,
+    "author": "Acme",
+    "author_slug": "acme",
 }
 
 
@@ -158,6 +182,29 @@ class TestGetAuthorConfig:
         mock_http.get.return_value = _json_response({"detail": "Not found"}, status=404)
         with pytest.raises(NotFoundError):
             await client.get_author_config()
+
+
+class TestMarketplaceDiscovery:
+    async def test_catalog_detail_uses_wrapped_tool(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"tool": _SUMMARY})
+        result = await client.get_marketplace_catalog_detail("acme", "search")
+        assert isinstance(result, MarketplaceCatalogDetailResponse)
+        assert result.tool.qualified_name == "acme/search"
+
+    async def test_author_profile_parses_spec_shape(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "org_slug": "acme",
+                "org_name": "Acme",
+                "tool_count": 1,
+                "total_calls": 12,
+                "tools": [_SUMMARY],
+                "next_cursor": None,
+            }
+        )
+        result = await client.get_author_profile("acme")
+        assert isinstance(result, MarketplaceAuthorProfileResponse)
+        assert result.tools[0].name == "search"
 
 
 # ─── get_marketplace_balance ─────────────────────────────────────────────────
@@ -330,20 +377,13 @@ class TestGetSubscriptions:
 
 class TestUnsubscribe:
     async def test_returns_unsubscribe_response(self, client, mock_http):
-        mock_http.delete.return_value = _json_response(
-            {
-                "subscription_id": "sub-1",
-                "unsubscribed_at": "2026-01-01T00:00:00Z",
-            }
-        )
+        mock_http.delete.return_value = _json_response({"unsubscribed": True})
         result = await client.unsubscribe("sub-1")
         assert isinstance(result, UnsubscribeResponse)
-        assert result.subscription_id == "sub-1"
+        assert result.unsubscribed is True
 
     async def test_correct_url(self, client, mock_http):
-        mock_http.delete.return_value = _json_response(
-            {"subscription_id": "sub-abc", "unsubscribed_at": "2026-01-01T00:00:00Z"}
-        )
+        mock_http.delete.return_value = _json_response({"unsubscribed": True})
         await client.unsubscribe("sub-abc")
         args, _ = mock_http.delete.call_args
         assert args[0] == "http://test/marketplace/subscriptions/sub-abc"
@@ -352,3 +392,56 @@ class TestUnsubscribe:
         mock_http.delete.return_value = _json_response({"detail": "Not found"}, status=404)
         with pytest.raises(NotFoundError):
             await client.unsubscribe("sub-missing")
+
+
+class TestMarketplaceFeedbackAndImport:
+    async def test_submit_feedback_sends_spec_request(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "id": "feedback-1",
+                "run_id": "run-1",
+                "qualified_tool_name": "acme/search",
+                "rating": 1,
+                "created_at": "2026-07-17T00:00:00Z",
+            },
+            status=201,
+        )
+        result = await client.submit_feedback(
+            "acme", "search", run_id="run-1", rating=1, comment="Useful"
+        )
+        assert result.run_id == "run-1"
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/marketplace/tools/acme/search/feedback"
+        assert kwargs["json"] == {"run_id": "run-1", "rating": 1, "comment": "Useful"}
+
+    async def test_import_preview_sends_server_id(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "server_id": "srv-1",
+                "slots_remaining": 4,
+                "can_publish": True,
+                "tools": [],
+                "errors": [],
+            }
+        )
+        result = await client.import_preview("srv-1", tool_names=["search"])
+        assert isinstance(result, MarketplaceImportPreviewResponse)
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/marketplace/import/preview"
+        assert kwargs["json"] == {"server_id": "srv-1", "tool_names": ["search"]}
+
+    async def test_import_publish_sends_server_id_and_tools(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {"server_id": "srv-1", "created": [], "errors": []}
+        )
+        tool = MarketplaceImportPublishToolRequest(
+            remote_tool_name="search",
+            name="search",
+            description="Search the web",
+        )
+        result = await client.import_publish("srv-1", [tool])
+        assert isinstance(result, MarketplaceImportPublishResponse)
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/marketplace/import/publish"
+        assert kwargs["json"]["server_id"] == "srv-1"
+        assert kwargs["json"]["tools"][0]["remote_tool_name"] == "search"

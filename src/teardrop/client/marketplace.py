@@ -12,12 +12,16 @@ from teardrop.models import (
     MarketplaceCatalogResponse,
     MarketplaceEarningsByToolResponse,
     MarketplaceEarningsResponse,
+    MarketplaceImportPreviewRequest,
     MarketplaceImportPreviewResponse,
+    MarketplaceImportPublishRequest,
     MarketplaceImportPublishResponse,
+    MarketplaceImportPublishToolRequest,
     MarketplaceSubscriptionListResponse,
     MarketplaceSubscriptionResponse,
     MarketplaceWithdrawalResponse,
     MarketplaceWithdrawalsListResponse,
+    RunFeedbackRequest,
     RunFeedbackResponse,
     UnsubscribeResponse,
     WithdrawRequest,
@@ -193,38 +197,46 @@ class _MarketplaceMixin:
         org_slug: str,
         tool_name: str,
         *,
-        rating: int | None = None,
-        comment: str | None = None,
+        run_id: str,
+        rating: int,
+        comment: str = "",
     ) -> RunFeedbackResponse:
         http = await self._get_http()
-        body: dict[str, Any] = {}
-        if rating is not None:
-            body["rating"] = rating
-        if comment is not None:
-            body["comment"] = comment
+        request = RunFeedbackRequest(run_id=run_id, rating=rating, comment=comment)
         resp = await http.post(
             f"{self._base_url}/marketplace/tools/{org_slug}/{tool_name}/feedback",
-            json=body,
+            json=request.model_dump(exclude_none=True),
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
         return RunFeedbackResponse.model_validate(resp.json())
 
-    async def import_preview(self, source_url: str) -> MarketplaceImportPreviewResponse:
+    async def import_preview(
+        self,
+        server_id: str,
+        *,
+        tool_names: list[str] | None = None,
+    ) -> MarketplaceImportPreviewResponse:
         http = await self._get_http()
+        request = MarketplaceImportPreviewRequest(server_id=server_id, tool_names=tool_names)
         resp = await http.post(
             f"{self._base_url}/marketplace/import/preview",
-            json={"source_url": source_url},
+            json=request.model_dump(exclude_none=True),
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
         return MarketplaceImportPreviewResponse.model_validate(resp.json())
 
-    async def import_publish(self, tools: list[dict[str, Any]]) -> MarketplaceImportPublishResponse:
+    async def import_publish(
+        self,
+        server_id: str,
+        tools: list[MarketplaceImportPublishToolRequest],
+    ) -> MarketplaceImportPublishResponse:
         http = await self._get_http()
+        request = MarketplaceImportPublishRequest(server_id=server_id, tools=tools)
         resp = await http.post(
             f"{self._base_url}/marketplace/import/publish",
-            json={"tools": tools},
+            json=request.model_dump(exclude_none=True),
             headers=await self._headers(),
         )
         self._raise_for_status(resp)

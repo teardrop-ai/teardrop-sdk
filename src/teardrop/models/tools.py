@@ -44,15 +44,20 @@ class OrgTool(BaseModel):
     name: str
     description: str
     input_schema: dict[str, Any]
-    webhook_url: str
-    webhook_method: str = "POST"
-    has_auth: bool = False
-    is_active: bool = True
-    publish_as_mcp: bool = False
-    marketplace_description: str | None = None
-    base_price_usdc: int | None = None
-    created_at: str = ""
-    updated_at: str = ""
+    output_schema: dict[str, Any] | None
+    webhook_url: str | None
+    webhook_method: str
+    mcp_server_id: str | None
+    mcp_tool_name: str | None
+    has_auth: bool
+    timeout_seconds: int
+    is_active: bool
+    publish_as_mcp: bool
+    marketplace_description: str
+    base_price_usdc: int
+    category: str
+    created_at: str
+    updated_at: str
 
     model_config = {"extra": "allow"}
 

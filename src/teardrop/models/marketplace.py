@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -24,12 +24,10 @@ class MarketplaceCatalogResponse(BaseModel):
     next_cursor: str | None = None
 
 
-class MarketplaceCatalogDetailResponse(MarketplaceTool):
+class MarketplaceCatalogDetailResponse(BaseModel):
     """Response from GET /marketplace/catalog/{org_slug}/{tool_name}."""
 
-    org_id: str = ""
-    created_at: str = ""
-    updated_at: str = ""
+    tool: "MarketplaceToolSummary"
 
 
 class MarketplaceToolSummary(BaseModel):
@@ -37,7 +35,20 @@ class MarketplaceToolSummary(BaseModel):
 
     name: str
     qualified_name: str
-    cost_usdc: int = 0
+    tool_name: str
+    display_name: str
+    description: str
+    short_description: str
+    input_schema: dict[str, Any]
+    cost_usdc: int
+    tool_type: str
+    category: str
+    total_calls: int
+    reputation_score: float
+    health_status: str
+    is_healthy: bool
+    author: str
+    author_slug: str
 
     model_config = {"extra": "allow"}
 
@@ -56,12 +67,12 @@ class MarketplaceAuthorConfigResponse(AuthorConfig):
 class MarketplaceAuthorProfileResponse(BaseModel):
     """Response from GET /marketplace/authors/{org_slug}."""
 
-    org_id: str
     org_slug: str
-    display_name: str = ""
-    bio: str = ""
-    website: str = ""
-    created_at: str = ""
+    org_name: str
+    tool_count: int
+    total_calls: int
+    tools: list[MarketplaceToolSummary]
+    next_cursor: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -155,8 +166,9 @@ class MarketplaceWithdrawalsListResponse(BaseModel):
 class CompleteWithdrawalResponse(BaseModel):
     """Response from POST /admin/marketplace/complete-withdrawal/{withdrawal_id}."""
 
-    id: str
+    status: str
     tx_hash: str
+    id: str | None = None
     completed_at: str = ""
 
     model_config = {"extra": "allow"}
@@ -166,6 +178,8 @@ class AdminWithdrawalActionResponse(BaseModel):
     """Response from admin marketplace withdrawal process/reset actions."""
 
     id: str
+    org_id: str
+    amount_usdc: int
     status: str
     updated_at: str = ""
 
@@ -185,8 +199,9 @@ class WithdrawalResetResponse(BaseModel):
 class MarketplaceSweepResponse(BaseModel):
     """Response from POST /admin/marketplace/sweep."""
 
+    processed: int
     tx_hash: str | None = None
-    amount_usdc: int = 0
+    amount_usdc: int | None = None
     swept_at: str = ""
 
     model_config = {"extra": "allow"}
@@ -195,19 +210,39 @@ class MarketplaceSweepResponse(BaseModel):
 class SweepStatusItem(BaseModel):
     """Item inside sweep-status response."""
 
-    tx_hash: str | None = None
-    amount_usdc: int = 0
+    id: str
+    org_id: str
+    amount_usdc: int
     status: str
-    created_at: str = ""
-
-    model_config = {"extra": "allow"}
+    sweep_attempt_count: int
+    created_at: str
+    last_sweep_error: str | None = None
+    next_sweep_at: str | None = None
 
 
 class SweepStatusResponse(BaseModel):
     """Response from GET /admin/marketplace/sweep-status."""
 
-    items: list[SweepStatusItem] = Field(default_factory=list)
-    next_cursor: str | None = None
+    pending: list[SweepStatusItem]
+    exhausted: list[SweepStatusItem]
+
+
+class AdminWithdrawalItem(BaseModel):
+    """Item inside AdminWithdrawalListResponse."""
+
+    id: str
+    org_id: str
+    amount_usdc: int
+    wallet: str
+    status: str
+    created_at: str
+    settled_at: str | None = None
+
+
+class AdminWithdrawalListResponse(BaseModel):
+    """Response from GET /admin/marketplace/withdrawals."""
+
+    withdrawals: list[AdminWithdrawalItem]
 
 
 class MarketplaceSubscription(BaseModel):
@@ -235,92 +270,116 @@ class MarketplaceSubscriptionListResponse(BaseModel):
 class UnsubscribeResponse(BaseModel):
     """Response from DELETE /marketplace/subscriptions/{subscription_id}."""
 
-    subscription_id: str
-    unsubscribed_at: str = ""
+    unsubscribed: Literal[True]
 
-    model_config = {"extra": "allow"}
+
+class RunFeedbackRequest(BaseModel):
+    """Request body for marketplace tool feedback."""
+
+    run_id: str = Field(..., min_length=1, max_length=128)
+    rating: int = Field(..., ge=-1, le=1)
+    comment: str = Field(default="", max_length=1000)
 
 
 class RunFeedbackResponse(BaseModel):
     """Response from POST /marketplace/tools/{org_slug}/{tool_name}/feedback."""
 
     id: str
-    message: str = ""
-    created_at: str = ""
-
-    model_config = {"extra": "allow"}
-
-
-class MarketplaceImportPreviewTool(BaseModel):
-    """Tool inside marketplace import preview."""
-
-    name: str
-    qualified_name: str
-    description: str = ""
-    input_schema: dict[str, Any] = Field(default_factory=dict)
-    cost_usdc: int = 0
-    issues: list[str] = Field(default_factory=list)
-
-    model_config = {"extra": "allow"}
+    run_id: str
+    qualified_tool_name: str
+    rating: int = Field(..., ge=-1, le=1)
+    created_at: str
 
 
-class MarketplaceImportPreviewError(BaseModel):
-    """Error inside marketplace import preview."""
+class MarketplaceImportPreviewRequest(BaseModel):
+    """Request body for marketplace import preview."""
 
-    tool_name: str
-    reason: str
-
-    model_config = {"extra": "allow"}
-
-
-class ImportPreviewSchemaStatus(BaseModel):
-    """Schema status inside ImportPreviewDroppedFeatures."""
-
-    compatible: bool = False
-    notes: str = ""
-
-    model_config = {"extra": "allow"}
-
-
-class ImportPreviewDroppedFeatures(BaseModel):
-    """Dropped features inside marketplace import preview."""
-
-    authentication: bool = False
-    schema: ImportPreviewSchemaStatus = Field(default_factory=ImportPreviewSchemaStatus)
-
-    model_config = {"extra": "allow"}
-
-
-class MarketplaceImportPreviewResponse(BaseModel):
-    """Response from POST /marketplace/import/preview."""
-
-    tools: list[MarketplaceImportPreviewTool] = Field(default_factory=list)
-    errors: list[MarketplaceImportPreviewError] = Field(default_factory=list)
-    dropped_features: ImportPreviewDroppedFeatures = Field(
-        default_factory=ImportPreviewDroppedFeatures
-    )
-
-    model_config = {"extra": "allow"}
+    server_id: str = Field(..., min_length=1, max_length=128)
+    tool_names: list[str] | None = None
 
 
 class MarketplaceImportPublishToolRequest(BaseModel):
     """Tool request inside marketplace import publish."""
 
-    name: str
-    qualified_name: str | None = None
-    description: str = ""
-    input_schema: dict[str, Any] = Field(default_factory=dict)
-    cost_usdc: int = 0
+    remote_tool_name: str = Field(..., min_length=1, max_length=128)
+    name: str = Field(..., min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
+    description: str = Field(..., min_length=1, max_length=500)
+    marketplace_description: str | None = Field(default=None, max_length=1000)
+    input_schema: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None
+    base_price_usdc: int = Field(default=0, ge=0, le=100_000_000)
+    category: str = Field(default="", pattern=r"^(|defi|search|data|communication|utility)$")
 
-    model_config = {"extra": "allow"}
+
+class MarketplaceImportPublishRequest(BaseModel):
+    """Request body for marketplace import publish."""
+
+    server_id: str = Field(..., min_length=1, max_length=128)
+    tools: list[MarketplaceImportPublishToolRequest] = Field(..., min_length=1, max_length=50)
+
+
+class MarketplaceImportPreviewTool(BaseModel):
+    """Tool inside marketplace import preview."""
+
+    remote_tool_name: str
+    proposed_name: str
+    description: str
+    marketplace_description: str
+    input_schema: dict[str, Any]
+    output_schema: dict[str, Any]
+    schema_status: "ImportPreviewSchemaStatus"
+    dropped_schema_features: "ImportPreviewDroppedFeatures"
+    name_adjusted: bool
+    name_collision_resolved: bool
+    quota_exceeded: bool
+    publishable: bool
+    suggested_base_price_usdc: int
+    category: str = ""
+    warnings: list[str] = Field(default_factory=list)
+
+
+class MarketplaceImportPreviewError(BaseModel):
+    """Error inside marketplace import preview."""
+
+    remote_tool_name: str
+    status_code: int
+    error: str
+
+
+class ImportPreviewSchemaStatus(BaseModel):
+    """Schema status inside ImportPreviewDroppedFeatures."""
+
+    input: str
+    output: str
+
+
+class ImportPreviewDroppedFeatures(BaseModel):
+    """Dropped features inside marketplace import preview."""
+
+    input: list[str] = Field(default_factory=list)
+    output: list[str] = Field(default_factory=list)
+
+
+class MarketplaceImportPreviewResponse(BaseModel):
+    """Response from POST /marketplace/import/preview."""
+
+    server_id: str
+    slots_remaining: int
+    can_publish: bool
+    tools: list[MarketplaceImportPreviewTool] = Field(default_factory=list)
+    errors: list[MarketplaceImportPreviewError] = Field(default_factory=list)
 
 
 class MarketplaceImportPublishedTool(BaseModel):
     """Published tool inside marketplace import publish."""
 
+    id: str
     name: str
-    qualified_name: str
-    published_at: str = ""
+    org_id: str
+    publish_as_mcp: bool
+    base_price_usdc: int
+    mcp_server_id: str | None = None
+    mcp_tool_name: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -328,24 +387,23 @@ class MarketplaceImportPublishedTool(BaseModel):
 class MarketplaceImportPublishCreatedItem(BaseModel):
     """Created item inside marketplace import publish response."""
 
-    tool: MarketplaceImportPublishedTool = Field(default_factory=dict)
-    cost_usdc: int = 0
-
-    model_config = {"extra": "allow"}
+    remote_tool_name: str
+    tool: MarketplaceImportPublishedTool
 
 
 class MarketplaceImportPublishError(BaseModel):
     """Error inside marketplace import publish."""
 
-    tool_name: str
-    reason: str
-
-    model_config = {"extra": "allow"}
+    remote_tool_name: str
+    name: str
+    status_code: int
+    error: str
 
 
 class MarketplaceImportPublishResponse(BaseModel):
     """Response from POST /marketplace/import/publish."""
 
+    server_id: str
     created: list[MarketplaceImportPublishCreatedItem] = Field(default_factory=list)
     errors: list[MarketplaceImportPublishError] = Field(default_factory=list)
 

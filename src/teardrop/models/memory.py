@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -13,6 +15,7 @@ class MemoryEntry(BaseModel):
     id: str
     content: str
     created_at: str = ""
+    source_run_id: str | None = None
 
 
 class MemoryListItem(MemoryEntry):
@@ -24,6 +27,7 @@ class MemoryListResponse(BaseModel):
 
     items: list[MemoryEntry] = Field(default_factory=list)
     next_cursor: str | None = None
+    total: int = 0
 
 
 class MemoryCreatedResponse(MemoryEntry):
@@ -33,31 +37,26 @@ class MemoryCreatedResponse(MemoryEntry):
 class MemoryDeletedResponse(BaseModel):
     """Response from DELETE /memories/{memory_id}."""
 
-    id: str
-    deleted_at: str = ""
-
-    model_config = {"extra": "allow"}
+    status: Literal["deleted"]
 
 
 class AdminMemoryItem(MemoryEntry):
     """Item inside AdminMemoryListResponse."""
 
+    created_at: str
+    user_id: str
     org_id: str = ""
-    user_id: str = ""
 
 
 class AdminMemoryListResponse(BaseModel):
     """Response from GET /admin/memories/org/{org_id}."""
 
-    items: list[AdminMemoryItem] = Field(default_factory=list)
-    next_cursor: str | None = None
+    items: list[AdminMemoryItem]
+    total: int
 
 
 class AdminMemoryPurgeResponse(BaseModel):
     """Response from DELETE /admin/memories/org/{org_id}."""
 
-    org_id: str
-    purged_count: int
-    purged_at: str = ""
-
-    model_config = {"extra": "allow"}
+    status: Literal["purged"]
+    deleted: int

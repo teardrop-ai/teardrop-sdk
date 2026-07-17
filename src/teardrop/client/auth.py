@@ -5,6 +5,8 @@ from __future__ import annotations
 from teardrop.models import (
     AuthMeResponse,
     CreateInviteResponse,
+    OrgCredentialItem,
+    RegenerateCredentialsResponse,
     ResendVerificationResponse,
     SiweNonceResponse,
     TokenResponse,
@@ -109,3 +111,21 @@ class _AuthMixin:
         )
         self._raise_for_status(resp)
         return CreateInviteResponse.model_validate(resp.json())
+
+    async def get_org_credentials(self) -> list[OrgCredentialItem]:
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/org/credentials",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return [OrgCredentialItem.model_validate(item) for item in resp.json()]
+
+    async def regenerate_org_credentials(self) -> RegenerateCredentialsResponse:
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/org/credentials/regenerate",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return RegenerateCredentialsResponse.model_validate(resp.json())

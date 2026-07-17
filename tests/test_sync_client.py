@@ -17,6 +17,7 @@ from teardrop.models import (
     ScheduledRunResult,
     ScheduledRunsPage,
     SSEEvent,
+    UsageSummary,
 )
 
 
@@ -64,6 +65,16 @@ class TestRunSync:
 
 
 class TestSyncDelegation:
+    def test_legacy_admin_usage_delegates(self):
+        result = UsageSummary(total_runs=1)
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with patch.object(
+                client._async, "get_admin_usage_org", new=AsyncMock(return_value=result)
+            ) as mock:
+                assert client.get_admin_usage_org("org-1", start="2026-01-01") == result
+                mock.assert_awaited_once_with("org-1", start="2026-01-01", end=None)
+
     def test_get_balance_delegates(self):
         balance = BillingBalance(org_id="o-1", balance_usdc=9999)
 
@@ -112,6 +123,130 @@ class TestSyncDelegation:
                 result = client.get_credit_history()
 
         assert result == response
+
+    def test_org_credentials_methods_delegate(self):
+        from teardrop.models import OrgCredentialItem, RegenerateCredentialsResponse
+
+        credentials = [OrgCredentialItem(client_id="client-1", created_at="2026-07-17T00:00:00Z")]
+        regenerated = RegenerateCredentialsResponse(
+            client_id="client-2",
+            client_secret="secret-once",
+            created_at="2026-07-17T00:00:00Z",
+        )
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with (
+                patch.object(
+                    client._async,
+                    "get_org_credentials",
+                    new=AsyncMock(return_value=credentials),
+                ) as get_credentials,
+                patch.object(
+                    client._async,
+                    "regenerate_org_credentials",
+                    new=AsyncMock(return_value=regenerated),
+                ) as regenerate_credentials,
+            ):
+                assert client.get_org_credentials() == credentials
+                assert client.regenerate_org_credentials() == regenerated
+
+        get_credentials.assert_awaited_once_with()
+        regenerate_credentials.assert_awaited_once_with()
+
+    def test_agent_governance_methods_delegate_with_spec_arguments(self):
+        from teardrop.models import (
+            AgentDecisionsResponse,
+            RunOutcomeRequest,
+            RunOutcomeResponse,
+            ToolExclusionCreateResponse,
+            ToolExclusionRequest,
+            ToolExclusionsResponse,
+        )
+
+        decisions = AgentDecisionsResponse(items=[])
+        outcome = RunOutcomeResponse(status="recorded")
+        exclusions = ToolExclusionsResponse(tool_names=["web_search"])
+        created = ToolExclusionCreateResponse(status="added", tool_name="web_search")
+        request = RunOutcomeRequest(rating=1)
+        exclusion_request = ToolExclusionRequest(tool_name="web_search")
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with (
+                patch.object(
+                    client._async, "get_agent_decisions", new=AsyncMock(return_value=decisions)
+                ) as get_decisions,
+                patch.object(
+                    client._async, "set_run_outcome", new=AsyncMock(return_value=outcome)
+                ) as set_outcome,
+                patch.object(
+                    client._async, "list_tool_exclusions", new=AsyncMock(return_value=exclusions)
+                ) as list_exclusions,
+                patch.object(
+                    client._async,
+                    "create_tool_exclusion",
+                    new=AsyncMock(return_value=created),
+                ) as create_exclusion,
+            ):
+                assert client.get_agent_decisions(limit=10) == decisions
+                assert client.set_run_outcome("run-1", request) == outcome
+                assert client.list_tool_exclusions() == exclusions
+                assert client.create_tool_exclusion(exclusion_request) == created
+
+        get_decisions.assert_awaited_once_with(limit=10)
+        set_outcome.assert_awaited_once_with("run-1", request)
+        list_exclusions.assert_awaited_once_with()
+        create_exclusion.assert_awaited_once_with(exclusion_request)
+
+    def test_marketplace_contract_methods_forward_required_arguments(self):
+        from teardrop.models import (
+            MarketplaceImportPreviewResponse,
+            MarketplaceImportPublishResponse,
+            RunFeedbackResponse,
+        )
+
+        feedback = RunFeedbackResponse(
+            id="feedback-1",
+            run_id="run-1",
+            qualified_tool_name="acme/search",
+            rating=1,
+            created_at="2026-07-17T00:00:00Z",
+        )
+        preview = MarketplaceImportPreviewResponse(
+            server_id="srv-1",
+            slots_remaining=1,
+            can_publish=True,
+            tools=[],
+            errors=[],
+        )
+        published = MarketplaceImportPublishResponse(server_id="srv-1", created=[], errors=[])
+        tools = []
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with (
+                patch.object(
+                    client._async, "submit_feedback", new=AsyncMock(return_value=feedback)
+                ) as submit_feedback,
+                patch.object(
+                    client._async, "import_preview", new=AsyncMock(return_value=preview)
+                ) as import_preview,
+                patch.object(
+                    client._async, "import_publish", new=AsyncMock(return_value=published)
+                ) as import_publish,
+            ):
+                assert (
+                    client.submit_feedback(
+                        "acme", "search", run_id="run-1", rating=1, comment="Useful"
+                    )
+                    == feedback
+                )
+                assert client.import_preview("srv-1", tool_names=["search"]) == preview
+                assert client.import_publish("srv-1", tools) == published
+
+        submit_feedback.assert_awaited_once_with(
+            "acme", "search", run_id="run-1", rating=1, comment="Useful"
+        )
+        import_preview.assert_awaited_once_with("srv-1", tool_names=["search"])
+        import_publish.assert_awaited_once_with("srv-1", tools)
 
     def test_topup_stripe_delegates(self):
         from teardrop.models import StripeTopupRequest, StripeTopupResponse

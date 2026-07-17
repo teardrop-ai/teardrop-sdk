@@ -28,11 +28,23 @@ Use this table to find which model backs which client method.
 | `MarketplaceTool`, `MarketplaceSubscription`, `AuthorConfig`, `EarningsEntry`, `WithdrawRequest` | marketplace |
 | `AddTrustedAgentRequest`, `TrustedAgent` | A2A delegation |
 | `AgentWallet` | agent wallets |
+| `AdminCreateA2AAgentRequest`, `AdminCreateClientCredentialsRequest`, `AdminCreateOrgRequest`, `AdminCreateUserRequest`, `AdminTopupRequest`, `CompleteWithdrawalRequest`, `SpendingConfigUpdate`, `ToolPricingOverrideRequest` | `admin.*` client methods |
+| `AdminMemoryItem`, `AdminMemoryListResponse`, `AdminMemoryPurgeResponse`, `AdminWithdrawalItem`, `AdminWithdrawalListResponse`, `SweepStatusItem`, `SweepStatusResponse` | admin responses |
+| `AdminTopupResponse`, `PendingSettlementItem`, `PendingSettlementsResponse`, `RevenueSummaryResponse`, `SettlementBalanceResponse`, `SettlementRetryResponse` | admin billing responses |
+| `AdminWithdrawalActionResponse`, `CompleteWithdrawalResponse`, `MarketplaceSweepResponse`, `WithdrawalResetResponse` | admin marketplace responses |
+| `CreateClientCredentialsResponse`, `CreateOrgResponse`, `CreateUserResponse`, `OrgSpendingConfigResponse` | admin identity and spending responses |
+| `ToolPricingDeleteResponse`, `ToolPricingOverrideResponse` | admin pricing responses |
 
 Import any model directly:
 
 ```python
-from teardrop import OrgLlmConfig, ModelBenchmarksResponse, BillingBalance
+from teardrop import (
+	AdminCreateOrgRequest,
+	AsyncAdminTeardropClient,
+	OrgLlmConfig,
+	ModelBenchmarksResponse,
+	BillingBalance,
+)
 ```
 
 ---

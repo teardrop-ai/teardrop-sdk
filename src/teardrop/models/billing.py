@@ -135,9 +135,28 @@ class AdminTopupResponse(BaseModel):
     """Response from POST /admin/credits/topup."""
 
     org_id: str
-    amount_usdc: int
     new_balance_usdc: int
+    amount_usdc: int | None = None
     created_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+class PendingSettlementItem(BaseModel):
+    """Item inside PendingSettlementsResponse."""
+
+    id: str
+    usage_event_id: str
+    org_id: str
+    run_id: str
+    billing_method: str
+    amount_usdc: int
+    retry_count: int
+    max_retries: int
+    status: str
+    created_at: str
+    last_error: str | None = None
+    next_retry_at: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -145,27 +164,14 @@ class AdminTopupResponse(BaseModel):
 class PendingSettlementsResponse(BaseModel):
     """Response from GET /admin/billing/pending."""
 
-    items: list[dict[str, Any]] = Field(default_factory=list)
-    next_cursor: str | None = None
-
-
-class PendingSettlementItem(BaseModel):
-    """Item inside PendingSettlementsResponse."""
-
-    id: str
-    org_id: str
-    amount_usdc: int
-    status: str
-    created_at: str = ""
-
-    model_config = {"extra": "allow"}
+    items: list[PendingSettlementItem]
 
 
 class SettlementRetryResponse(BaseModel):
     """Response from POST /admin/billing/pending/{settlement_id}/retry."""
 
-    id: str
-    status: str
+    settlement_id: str
+    status: Literal["pending"]
     retried_at: str = ""
 
     model_config = {"extra": "allow"}
@@ -174,6 +180,7 @@ class SettlementRetryResponse(BaseModel):
 class RevenueSummaryResponse(BaseModel):
     """Response from GET /admin/billing/revenue."""
 
+    total_settlements: int
     total_revenue_usdc: int
     period_start: str = ""
     period_end: str = ""
@@ -184,6 +191,9 @@ class RevenueSummaryResponse(BaseModel):
 class SettlementBalanceResponse(BaseModel):
     """Response from GET /admin/marketplace/settlement-balance."""
 
+    account: str
+    address: str
+    chain_id: int
     balance_usdc: int
     updated_at: str = ""
 
@@ -194,16 +204,13 @@ class ToolPricingOverrideResponse(BaseModel):
     """Response from POST /admin/pricing/tools."""
 
     tool_name: str
-    price_usdc: int
-    updated_at: str = ""
-
-    model_config = {"extra": "allow"}
+    cost_usdc: int
+    description: str
+    updated: bool
 
 
 class ToolPricingDeleteResponse(BaseModel):
     """Response from DELETE /admin/pricing/tools/{tool_name}."""
 
     tool_name: str
-    deleted_at: str = ""
-
-    model_config = {"extra": "allow"}
+    deleted: bool

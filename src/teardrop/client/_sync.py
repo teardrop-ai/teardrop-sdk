@@ -11,6 +11,7 @@ from teardrop.models import (
     AddTrustedAgentRequest,
     AgentCard,
     AgentDecisionListResponse,
+    AgentDecisionsResponse,
     AgentTool,
     AgentWalletDeactivatedResponse,
     AgentWalletResponse,
@@ -39,6 +40,7 @@ from teardrop.models import (
     MarketplaceEarningsResponse,
     MarketplaceImportPreviewResponse,
     MarketplaceImportPublishResponse,
+    MarketplaceImportPublishToolRequest,
     MarketplaceSubscriptionListResponse,
     MarketplaceSubscriptionResponse,
     MarketplaceWithdrawalResponse,
@@ -49,8 +51,12 @@ from teardrop.models import (
     MemoryDeletedResponse,
     MemoryListResponse,
     ModelBenchmarksResponse,
+    OrgCredentialItem,
     OrgToolResponse,
+    RegenerateCredentialsResponse,
     RunFeedbackResponse,
+    RunOutcomeRequest,
+    RunOutcomeResponse,
     SSEEvent,
     StoreMemoryRequest,
     StripeSessionStatusResponse,
@@ -60,8 +66,11 @@ from teardrop.models import (
     TokenResponse,
     ToolDeletedResponse,
     ToolExclusionActionResponse,
+    ToolExclusionCreateResponse,
     ToolExclusionListResponse,
     ToolExclusionRemovedResponse,
+    ToolExclusionRequest,
+    ToolExclusionsResponse,
     TrustedAgent,
     UnsubscribeResponse,
     UpdateMcpServerRequest,
@@ -113,8 +122,11 @@ class TeardropClient:
     def get_decisions(self, **kwargs: Any) -> AgentDecisionListResponse:
         return self._run(self._async.get_decisions(**kwargs))
 
-    def set_run_outcome(self, run_id: str, **kwargs: Any) -> dict[str, Any]:
-        return self._run(self._async.set_run_outcome(run_id, **kwargs))
+    def set_run_outcome(self, run_id: str, request: RunOutcomeRequest) -> RunOutcomeResponse:
+        return self._run(self._async.set_run_outcome(run_id, request))
+
+    def get_agent_decisions(self, **kwargs: Any) -> AgentDecisionsResponse:
+        return self._run(self._async.get_agent_decisions(**kwargs))
 
     def dispatch_event(
         self, trigger_token: str, event_json: dict[str, Any]
@@ -129,6 +141,15 @@ class TeardropClient:
 
     def remove_tool_exclusion(self, tool_name: str) -> ToolExclusionRemovedResponse:
         return self._run(self._async.remove_tool_exclusion(tool_name))
+
+    def list_tool_exclusions(self) -> ToolExclusionsResponse:
+        return self._run(self._async.list_tool_exclusions())
+
+    def create_tool_exclusion(self, request: ToolExclusionRequest) -> ToolExclusionCreateResponse:
+        return self._run(self._async.create_tool_exclusion(request))
+
+    def delete_tool_exclusion(self, tool_name: str) -> None:
+        return self._run(self._async.delete_tool_exclusion(tool_name))
 
     def get_siwe_nonce(self) -> dict[str, str]:
         return self._run(self._async.get_siwe_nonce())
@@ -159,6 +180,12 @@ class TeardropClient:
 
     def invite(self, **kwargs: Any) -> CreateInviteResponse:
         return self._run(self._async.invite(**kwargs))
+
+    def get_org_credentials(self) -> list[OrgCredentialItem]:
+        return self._run(self._async.get_org_credentials())
+
+    def regenerate_org_credentials(self) -> RegenerateCredentialsResponse:
+        return self._run(self._async.regenerate_org_credentials())
 
     def get_balance(self) -> BillingBalance:
         return self._run(self._async.get_balance())
@@ -194,6 +221,24 @@ class TeardropClient:
 
     def get_usage(self, **kwargs: Any) -> UsageSummary:
         return self._run(self._async.get_usage(**kwargs))
+
+    def get_admin_usage_org(
+        self,
+        org_id: str,
+        *,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> UsageSummary:
+        return self._run(self._async.get_admin_usage_org(org_id, start=start, end=end))
+
+    def get_admin_usage_user(
+        self,
+        user_id: str,
+        *,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> UsageSummary:
+        return self._run(self._async.get_admin_usage_user(user_id, start=start, end=end))
 
     def link_wallet(self, request: LinkWalletRequest) -> LinkWalletResponse:
         return self._run(self._async.link_wallet(request))
@@ -300,14 +345,39 @@ class TeardropClient:
     def unsubscribe(self, subscription_id: str) -> UnsubscribeResponse:
         return self._run(self._async.unsubscribe(subscription_id))
 
-    def submit_feedback(self, org_slug: str, tool_name: str, **kwargs: Any) -> RunFeedbackResponse:
-        return self._run(self._async.submit_feedback(org_slug, tool_name, **kwargs))
+    def submit_feedback(
+        self,
+        org_slug: str,
+        tool_name: str,
+        *,
+        run_id: str,
+        rating: int,
+        comment: str = "",
+    ) -> RunFeedbackResponse:
+        return self._run(
+            self._async.submit_feedback(
+                org_slug,
+                tool_name,
+                run_id=run_id,
+                rating=rating,
+                comment=comment,
+            )
+        )
 
-    def import_preview(self, source_url: str) -> MarketplaceImportPreviewResponse:
-        return self._run(self._async.import_preview(source_url))
+    def import_preview(
+        self,
+        server_id: str,
+        *,
+        tool_names: list[str] | None = None,
+    ) -> MarketplaceImportPreviewResponse:
+        return self._run(self._async.import_preview(server_id, tool_names=tool_names))
 
-    def import_publish(self, tools: list[dict[str, Any]]) -> MarketplaceImportPublishResponse:
-        return self._run(self._async.import_publish(tools))
+    def import_publish(
+        self,
+        server_id: str,
+        tools: list[MarketplaceImportPublishToolRequest],
+    ) -> MarketplaceImportPublishResponse:
+        return self._run(self._async.import_publish(server_id, tools))
 
     def get_llm_config(self) -> LlmConfigResponse:
         return self._run(self._async.get_llm_config())

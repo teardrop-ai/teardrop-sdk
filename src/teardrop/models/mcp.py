@@ -16,13 +16,13 @@ class OrgMcpServer(BaseModel):
     org_id: str
     name: str
     url: str
-    auth_type: McpServerAuthType = "none"
-    has_auth: bool = False
-    auth_header_name: str | None = None
-    is_active: bool = True
-    timeout_seconds: int = 15
-    created_at: str = ""
-    updated_at: str = ""
+    auth_type: McpServerAuthType
+    has_auth: bool
+    auth_header_name: str | None
+    is_active: bool
+    timeout_seconds: int
+    created_at: str
+    updated_at: str
 
     model_config = {"extra": "allow"}
 
