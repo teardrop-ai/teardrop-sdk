@@ -51,7 +51,6 @@ from teardrop.models import (
     ModelBenchmarksResponse,
     OrgToolResponse,
     RunFeedbackResponse,
-    RunOutcomeResponse,
     SSEEvent,
     StoreMemoryRequest,
     StripeSessionStatusResponse,
@@ -114,7 +113,7 @@ class TeardropClient:
     def get_decisions(self, **kwargs: Any) -> AgentDecisionListResponse:
         return self._run(self._async.get_decisions(**kwargs))
 
-    def set_run_outcome(self, run_id: str, **kwargs: Any) -> RunOutcomeResponse:
+    def set_run_outcome(self, run_id: str, **kwargs: Any) -> dict[str, Any]:
         return self._run(self._async.set_run_outcome(run_id, **kwargs))
 
     def dispatch_event(

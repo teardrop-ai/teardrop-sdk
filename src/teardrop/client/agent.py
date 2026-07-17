@@ -13,7 +13,6 @@ from teardrop.models import (
     AgentToolsResponse,
     EventDispatchResponse,
     RunOutcomeRequest,
-    RunOutcomeResponse,
     SSEEvent,
     ToolExclusionActionResponse,
     ToolExclusionCreateResponse,
@@ -103,9 +102,9 @@ class _AgentMixin:
         *,
         outcome: str | None = None,
         summary: str | None = None,
-    ) -> RunOutcomeResponse | dict[str, Any]:
+    ) -> dict[str, Any]:
         if request is not None:
-            return await self.set_run_outcome_legacy(run_id, request)
+            return await self._set_run_outcome_with_request(run_id, request)
 
         if outcome is None:
             raise TypeError("outcome is required when request is not provided")
@@ -120,7 +119,7 @@ class _AgentMixin:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return RunOutcomeResponse.model_validate(resp.json())
+        return resp.json()
 
     async def dispatch_event(
         self, trigger_token: str, event_json: dict[str, Any]
@@ -209,7 +208,7 @@ class _AgentMixin:
         self._raise_for_status(resp)
         return AgentDecisionsResponse.model_validate(resp.json())
 
-    async def set_run_outcome_legacy(
+    async def _set_run_outcome_with_request(
         self, run_id: str, request: RunOutcomeRequest
     ) -> dict[str, Any]:
         http = await self._get_http()

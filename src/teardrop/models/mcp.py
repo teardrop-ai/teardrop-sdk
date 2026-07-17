@@ -103,9 +103,11 @@ class TestMcpToolResponse(BaseModel):
     """Response from POST /mcp/servers/{server_id}/test-tool."""
 
     success: bool
-    latency_ms: int | None = None
-    result: dict[str, Any] | None = None
-    output: dict[str, Any] = Field(default_factory=dict)
+    latency_ms: int | None = Field(default=None, description="Legacy timing field.")
+    result: dict[str, Any] | None = Field(default=None, description="Legacy result field.")
+    output: dict[str, Any] = Field(
+        default_factory=dict, description="Current output field used by newer backend responses."
+    )
     error: str | None = None
 
     model_config = {"extra": "allow"}
