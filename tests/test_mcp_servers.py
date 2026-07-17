@@ -20,6 +20,8 @@ from teardrop.exceptions import (
 from teardrop.models import (
     CreateMcpServerRequest,
     DiscoverMcpToolsResponse,
+    McpServerDeletedResponse,
+    McpServerResponse,
     OrgMcpServer,
     UpdateMcpServerRequest,
 )
@@ -77,7 +79,7 @@ class TestCreateMcpServer:
         mock_http.post = AsyncMock(return_value=_json_response(_SERVER, status=201))
         req = CreateMcpServerRequest(name="my_server", url="https://mcp.example.com/sse")
         result = await client.create_mcp_server(req)
-        assert isinstance(result, OrgMcpServer)
+        assert isinstance(result, McpServerResponse)
         assert result.name == "my_server"
         assert result.has_auth is False
 
@@ -277,18 +279,15 @@ class TestUpdateMcpServer:
 
 class TestDeleteMcpServer:
     @pytest.mark.asyncio
-    async def test_delete_success_returns_none(
+    async def test_delete_success_returns_deleted_response(
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
         mock_http.delete = AsyncMock(
-            return_value=httpx.Response(
-                status_code=204,
-                content=b"",
-                request=httpx.Request("DELETE", "http://test"),
-            )
+            return_value=_json_response({"id": "srv-1", "deleted_at": "2026-01-01T00:00:00Z"})
         )
         result = await client.delete_mcp_server("srv-1")
-        assert result is None
+        assert isinstance(result, McpServerDeletedResponse)
+        assert result.id == "srv-1"
 
     @pytest.mark.asyncio
     async def test_delete_not_found_raises_not_found_error(
@@ -304,7 +303,9 @@ class TestDeleteMcpServer:
     async def test_delete_hits_correct_url(
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
-        mock_http.delete = AsyncMock(return_value=_json_response({"status": "deleted"}))
+        mock_http.delete = AsyncMock(
+            return_value=_json_response({"id": "srv-1", "deleted_at": "2026-01-01T00:00:00Z"})
+        )
         await client.delete_mcp_server("srv-1")
         url_called = mock_http.delete.call_args.args[0]
         assert url_called == "http://test/mcp/servers/srv-1"
@@ -413,6 +414,20 @@ class TestTestMcpTool:
         args, kwargs = mock_http.post.call_args
         assert args[0] == "http://test/mcp/servers/srv-1/test-tool"
         assert kwargs["json"] == {"tool_name": "search", "args": {}}
+
+    @pytest.mark.asyncio
+    async def test_legacy_signature_uses_args_key(
+        self, client: AsyncTeardropClient, mock_http: AsyncMock
+    ) -> None:
+        mock_http.post = AsyncMock(
+            return_value=_json_response(
+                {"success": False, "latency_ms": 10, "result": None, "error": "timeout"}
+            )
+        )
+        await client.test_mcp_tool("srv-1", "search", {"q": "hello"})
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/mcp/servers/srv-1/test-tool"
+        assert kwargs["json"] == {"tool_name": "search", "args": {"q": "hello"}}
 
     @pytest.mark.asyncio
     async def test_404_raises_not_found(

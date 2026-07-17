@@ -15,6 +15,7 @@ from teardrop.exceptions import APIError
 from teardrop.models import (
     CreateOrgToolRequest,
     OrgTool,
+    ToolDeletedResponse,
     UpdateOrgToolRequest,
 )
 
@@ -147,16 +148,13 @@ class TestUpdateTool:
 
 class TestDeleteTool:
     @pytest.mark.asyncio
-    async def test_returns_none_on_204(self, client, mock_http):
+    async def test_returns_deleted_response(self, client, mock_http):
         mock_http.delete = AsyncMock(
-            return_value=httpx.Response(
-                status_code=204,
-                content=b"",
-                request=httpx.Request("DELETE", "http://test"),
-            )
+            return_value=_json_response({"id": "tool-123", "deleted_at": "2026-01-01T00:00:00Z"})
         )
         result = await client.delete_tool("tool-123")
-        assert result is None
+        assert isinstance(result, ToolDeletedResponse)
+        assert result.id == "tool-123"
 
     @pytest.mark.asyncio
     async def test_404_raises_api_error(self, client, mock_http):

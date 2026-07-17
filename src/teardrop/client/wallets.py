@@ -4,12 +4,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from teardrop.client._core import _parse_list_response
-from teardrop.models import AgentWallet, LinkWalletRequest, Wallet
+from teardrop.models import (
+    AgentWalletDeactivatedResponse,
+    AgentWalletResponse,
+    LinkWalletRequest,
+    LinkWalletResponse,
+    WalletDeletedResponse,
+    WalletItem,
+)
 
 
 class _WalletsMixin:
-    async def link_wallet(self, request: LinkWalletRequest) -> Wallet:
+    async def link_wallet(self, request: LinkWalletRequest) -> LinkWalletResponse:
         http = await self._get_http()
         resp = await http.post(
             f"{self._base_url}/wallets/link",
@@ -17,31 +23,35 @@ class _WalletsMixin:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return Wallet.model_validate(resp.json())
+        return LinkWalletResponse.model_validate(resp.json())
 
-    async def get_wallets(self) -> list[Wallet]:
+    async def get_wallets(self) -> list[WalletItem]:
         http = await self._get_http()
         resp = await http.get(f"{self._base_url}/wallets/me", headers=await self._headers())
         self._raise_for_status(resp)
-        return _parse_list_response(resp.json(), Wallet)
+        data = resp.json()
+        if isinstance(data, list):
+            return [WalletItem.model_validate(item) for item in data]
+        return [WalletItem.model_validate(item) for item in data.get("items", [])]
 
-    async def delete_wallet(self, wallet_id: str) -> None:
+    async def delete_wallet(self, wallet_id: str) -> WalletDeletedResponse:
         http = await self._get_http()
         resp = await http.delete(
             f"{self._base_url}/wallets/{wallet_id}", headers=await self._headers()
         )
         self._raise_for_status(resp)
+        return WalletDeletedResponse.model_validate(resp.json())
 
-    async def provision_agent_wallet(self) -> AgentWallet:
+    async def provision_agent_wallet(self) -> AgentWalletResponse:
         http = await self._get_http()
         resp = await http.post(
             f"{self._base_url}/wallets/agent",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return AgentWallet.model_validate(resp.json())
+        return AgentWalletResponse.model_validate(resp.json())
 
-    async def get_agent_wallet(self, *, include_balance: bool = False) -> AgentWallet:
+    async def get_agent_wallet(self, *, include_balance: bool = False) -> AgentWalletResponse:
         http = await self._get_http()
         params: dict[str, Any] = {}
         if include_balance:
@@ -52,12 +62,13 @@ class _WalletsMixin:
             params=params,
         )
         self._raise_for_status(resp)
-        return AgentWallet.model_validate(resp.json())
+        return AgentWalletResponse.model_validate(resp.json())
 
-    async def deactivate_agent_wallet(self) -> None:
+    async def deactivate_agent_wallet(self) -> AgentWalletDeactivatedResponse:
         http = await self._get_http()
         resp = await http.delete(
             f"{self._base_url}/wallets/agent",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
+        return AgentWalletDeactivatedResponse.model_validate(resp.json())

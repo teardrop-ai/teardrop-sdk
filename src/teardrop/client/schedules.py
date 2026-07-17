@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 
-from teardrop.client._core import _parse_list_response, _parse_scheduled_runs_page
+from teardrop.client._core import _parse_scheduled_runs_page
 from teardrop.models import (
     CreateScheduleRequest,
+    ScheduleDeletedResponse,
     ScheduledRun,
+    ScheduledRunListResponse,
     ScheduledRunResult,
     ScheduledRunsPage,
     UpdateScheduleRequest,
@@ -32,14 +34,14 @@ class SchedulesModule:
         self._c._raise_for_status(resp)
         return ScheduledRun.model_validate(resp.json())
 
-    async def list(self) -> list[ScheduledRun]:
+    async def list(self) -> ScheduledRunListResponse:
         http = await self._c._get_http()
         resp = await http.get(
             f"{self._c._base_url}/agent/schedules",
             headers=await self._c._headers(),
         )
         self._c._raise_for_status(resp)
-        return _parse_list_response(resp.json(), ScheduledRun)
+        return ScheduledRunListResponse.model_validate(resp.json())
 
     async def get(self, schedule_id: str) -> ScheduledRun:
         http = await self._c._get_http()
@@ -60,13 +62,14 @@ class SchedulesModule:
         self._c._raise_for_status(resp)
         return ScheduledRun.model_validate(resp.json())
 
-    async def delete(self, schedule_id: str) -> None:
+    async def delete(self, schedule_id: str) -> ScheduleDeletedResponse:
         http = await self._c._get_http()
         resp = await http.delete(
             f"{self._c._base_url}/agent/schedules/{schedule_id}",
             headers=await self._c._headers(),
         )
         self._c._raise_for_status(resp)
+        return ScheduleDeletedResponse.model_validate(resp.json())
 
     async def runs(
         self,
@@ -113,7 +116,7 @@ class _SyncSchedulesModule:
     def create(self, request: CreateScheduleRequest) -> ScheduledRun:
         return self._c._run(self._c._async.schedules.create(request))
 
-    def list(self) -> list[ScheduledRun]:
+    def list(self) -> ScheduledRunListResponse:
         return self._c._run(self._c._async.schedules.list())
 
     def get(self, schedule_id: str) -> ScheduledRun:
@@ -122,7 +125,7 @@ class _SyncSchedulesModule:
     def update(self, schedule_id: str, request: UpdateScheduleRequest) -> ScheduledRun:
         return self._c._run(self._c._async.schedules.update(schedule_id, request))
 
-    def delete(self, schedule_id: str) -> None:
+    def delete(self, schedule_id: str) -> ScheduleDeletedResponse:
         return self._c._run(self._c._async.schedules.delete(schedule_id))
 
     def runs(

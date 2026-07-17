@@ -4,12 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from teardrop.client._core import _parse_list_response
-from teardrop.models import AddTrustedAgentRequest, TrustedAgent
+from teardrop.models import (
+    A2AAgentDeletedResponse,
+    A2ADelegationEvent,
+    AddTrustedAgentRequest,
+    OrgA2AAgentResponse,
+    TrustedAgent,
+)
 
 
 class _A2AMixin:
-    async def add_trusted_agent(self, request: AddTrustedAgentRequest) -> TrustedAgent:
+    async def add_trusted_agent(self, request: AddTrustedAgentRequest) -> OrgA2AAgentResponse:
         http = await self._get_http()
         resp = await http.post(
             f"{self._base_url}/a2a/agents",
@@ -17,7 +22,7 @@ class _A2AMixin:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return TrustedAgent.model_validate(resp.json())
+        return OrgA2AAgentResponse.model_validate(resp.json())
 
     async def list_trusted_agents(self) -> list[TrustedAgent]:
         http = await self._get_http()
@@ -26,23 +31,37 @@ class _A2AMixin:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return _parse_list_response(resp.json(), TrustedAgent)
+        data = resp.json()
+        if isinstance(data, list):
+            return [TrustedAgent.model_validate(item) for item in data]
+        return [TrustedAgent.model_validate(item) for item in data.get("items", [])]
 
-    async def remove_trusted_agent(self, agent_id: str) -> None:
+    async def remove_trusted_agent(self, agent_id: str) -> A2AAgentDeletedResponse:
         http = await self._get_http()
         resp = await http.delete(
             f"{self._base_url}/a2a/agents/{agent_id}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
+        return A2AAgentDeletedResponse.model_validate(resp.json())
 
-    async def get_delegations(self, *, limit: int = 20) -> list[dict[str, Any]]:
+    async def get_delegations(
+        self,
+        *,
+        limit: int = 20,
+        cursor: str | None = None,
+    ) -> list[A2ADelegationEvent]:
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
         resp = await http.get(
             f"{self._base_url}/a2a/delegations",
             headers=await self._headers(),
             params=params,
         )
         self._raise_for_status(resp)
-        return resp.json()
+        data = resp.json()
+        if isinstance(data, list):
+            return [A2ADelegationEvent.model_validate(item) for item in data]
+        return [A2ADelegationEvent.model_validate(item) for item in data.get("items", [])]

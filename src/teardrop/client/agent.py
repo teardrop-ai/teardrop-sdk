@@ -6,13 +6,18 @@ import uuid
 from typing import Any, AsyncIterator
 
 from teardrop.models import (
+    AgentDecisionListResponse,
     AgentDecisionsResponse,
     AgentRunRequest,
     AgentTool,
     AgentToolsResponse,
+    EventDispatchResponse,
     RunOutcomeRequest,
     SSEEvent,
+    ToolExclusionActionResponse,
     ToolExclusionCreateResponse,
+    ToolExclusionListResponse,
+    ToolExclusionRemovedResponse,
     ToolExclusionRequest,
     ToolExclusionsResponse,
     ToolPolicy,
@@ -67,7 +72,75 @@ class _AgentMixin:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return AgentToolsResponse.model_validate(resp.json()).tools
+        data = resp.json()
+        if isinstance(data, list):
+            return [AgentTool.model_validate(item) for item in data]
+        return AgentToolsResponse.model_validate(data).tools
+
+    async def get_decisions(
+        self,
+        *,
+        limit: int = 20,
+        cursor: str | None = None,
+    ) -> AgentDecisionListResponse:
+        http = await self._get_http()
+        params: dict[str, Any] = {"limit": limit}
+        if cursor is not None:
+            params["cursor"] = cursor
+        resp = await http.get(
+            f"{self._base_url}/agent/decisions",
+            headers=await self._headers(),
+            params=params,
+        )
+        self._raise_for_status(resp)
+        return AgentDecisionListResponse.model_validate(resp.json())
+
+    async def set_run_outcome(
+        self,
+        run_id: str,
+        request: RunOutcomeRequest | None = None,
+        *,
+        outcome: str | None = None,
+        summary: str | None = None,
+    ) -> dict[str, Any]:
+        if request is not None:
+            return await self._set_run_outcome_with_request(run_id, request)
+
+        if outcome is None:
+            raise TypeError("outcome is required when request is not provided")
+
+        http = await self._get_http()
+        body: dict[str, Any] = {"outcome": outcome}
+        if summary is not None:
+            body["summary"] = summary
+        resp = await http.patch(
+            f"{self._base_url}/agent/runs/{run_id}/outcome",
+            json=body,
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return resp.json()
+
+    async def dispatch_event(
+        self, trigger_token: str, event_json: dict[str, Any]
+    ) -> EventDispatchResponse:
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/agent/events/{trigger_token}",
+            json=event_json,
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return EventDispatchResponse.model_validate(resp.json())
+
+    async def get_tool_exclusions(self) -> ToolExclusionListResponse:
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/agent/tool-exclusions",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return ToolExclusionListResponse.model_validate(resp.json())
 
     async def list_tool_exclusions(self) -> ToolExclusionsResponse:
         http = await self._get_http()
@@ -77,6 +150,16 @@ class _AgentMixin:
         )
         self._raise_for_status(resp)
         return ToolExclusionsResponse.model_validate(resp.json())
+
+    async def add_tool_exclusion(self, tool_name: str) -> ToolExclusionActionResponse:
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/agent/tool-exclusions",
+            json={"tool_name": tool_name},
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return ToolExclusionActionResponse.model_validate(resp.json())
 
     async def create_tool_exclusion(
         self, request: ToolExclusionRequest
@@ -90,6 +173,15 @@ class _AgentMixin:
         self._raise_for_status(resp)
         return ToolExclusionCreateResponse.model_validate(resp.json())
 
+    async def remove_tool_exclusion(self, tool_name: str) -> ToolExclusionRemovedResponse:
+        http = await self._get_http()
+        resp = await http.delete(
+            f"{self._base_url}/agent/tool-exclusions/{tool_name}",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return ToolExclusionRemovedResponse.model_validate(resp.json())
+
     async def delete_tool_exclusion(self, tool_name: str) -> None:
         http = await self._get_http()
         resp = await http.delete(
@@ -99,7 +191,10 @@ class _AgentMixin:
         self._raise_for_status(resp)
 
     async def get_agent_decisions(
-        self, *, limit: int = 50, cursor: str | None = None
+        self,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
     ) -> AgentDecisionsResponse:
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
@@ -113,7 +208,9 @@ class _AgentMixin:
         self._raise_for_status(resp)
         return AgentDecisionsResponse.model_validate(resp.json())
 
-    async def set_run_outcome(self, run_id: str, request: RunOutcomeRequest) -> dict[str, Any]:
+    async def _set_run_outcome_with_request(
+        self, run_id: str, request: RunOutcomeRequest
+    ) -> dict[str, Any]:
         http = await self._get_http()
         resp = await http.patch(
             f"{self._base_url}/agent/runs/{run_id}/outcome",

@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from teardrop.client import AsyncTeardropClient
-from teardrop.exceptions import (
-    AuthenticationError,
-    ConflictError,
-    ForbiddenError,
-    ValidationError,
+from teardrop.exceptions import AuthenticationError, ConflictError, ValidationError
+from teardrop.models import (
+    ResendVerificationResponse,
+    SiweNonceResponse,
+    TokenResponse,
+    VerifyEmailResponse,
 )
-from teardrop.models import OrgCredentialsEntry, RegenerateCredentialsResponse, TokenResponse
 
 from .conftest import _json_response, _make_jwt
 
@@ -48,10 +48,11 @@ def _token_response_dict() -> dict:
 
 
 class TestGetSiweNonce:
-    async def test_returns_dict_with_nonce(self, client, mock_http):
+    async def test_returns_nonce_response(self, client, mock_http):
         mock_http.get.return_value = _json_response({"nonce": "abc123"})
         result = await client.get_siwe_nonce()
-        assert result == {"nonce": "abc123"}
+        assert isinstance(result, SiweNonceResponse)
+        assert result.nonce == "abc123"
         mock_http.get.assert_called_once_with("http://test/auth/siwe/nonce")
 
     async def test_401_raises_auth_error(self, client, mock_http):
@@ -185,11 +186,11 @@ class TestVerifyEmail:
         _, kwargs = mock_http.get.call_args
         assert kwargs["params"] == {"token": "one-time-token"}
 
-    async def test_returns_dict(self, client, mock_http):
+    async def test_returns_verify_response(self, client, mock_http):
         mock_http.get.return_value = _json_response({"message": "verified"})
         result = await client.verify_email("tok")
-        assert isinstance(result, dict)
-        assert result["message"] == "verified"
+        assert isinstance(result, VerifyEmailResponse)
+        assert result.message == "verified"
 
 
 # ─── resend_verification ──────────────────────────────────────────────────────
@@ -202,10 +203,11 @@ class TestResendVerification:
         _, kwargs = mock_http.post.call_args
         assert kwargs["json"] == {"email": "u@example.com"}
 
-    async def test_returns_dict(self, client, mock_http):
+    async def test_returns_resend_response(self, client, mock_http):
         mock_http.post.return_value = _json_response({"message": "sent"})
         result = await client.resend_verification("u@example.com")
-        assert isinstance(result, dict)
+        assert isinstance(result, ResendVerificationResponse)
+        assert result.message == "sent"
 
 
 # ─── invite ───────────────────────────────────────────────────────────────────
@@ -232,58 +234,3 @@ class TestInvite:
         await client.invite()
         _, kwargs = mock_http.post.call_args
         assert kwargs["json"]["role"] == "member"
-
-
-# ─── get_org_credentials ──────────────────────────────────────────────────────
-
-
-class TestGetOrgCredentials:
-    async def test_returns_org_credentials_list(self, client, mock_http):
-        mock_http.get.return_value = _json_response(
-            [{"client_id": "cid-1", "created_at": "2026-01-01T00:00:00Z"}]
-        )
-        result = await client.get_org_credentials()
-        assert isinstance(result, list)
-        assert isinstance(result[0], OrgCredentialsEntry)
-        assert result[0].client_id == "cid-1"
-
-    async def test_calls_expected_url(self, client, mock_http):
-        mock_http.get.return_value = _json_response([])
-        await client.get_org_credentials()
-        args, kwargs = mock_http.get.call_args
-        assert args[0] == "http://test/org/credentials"
-
-    async def test_403_raises_forbidden_error(self, client, mock_http):
-        mock_http.get.return_value = _json_response({"detail": "Forbidden"}, status=403)
-        with pytest.raises(ForbiddenError):
-            await client.get_org_credentials()
-
-
-# ─── regenerate_org_credentials ───────────────────────────────────────────────
-
-
-class TestRegenerateOrgCredentials:
-    async def test_returns_regenerate_response(self, client, mock_http):
-        mock_http.post.return_value = _json_response(
-            {
-                "client_id": "cid-new",
-                "client_secret": "secret-new",
-                "created_at": "2026-01-01T00:00:00Z",
-            }
-        )
-        result = await client.regenerate_org_credentials()
-        assert isinstance(result, RegenerateCredentialsResponse)
-        assert result.client_secret == "secret-new"
-
-    async def test_calls_expected_url(self, client, mock_http):
-        mock_http.post.return_value = _json_response(
-            {"client_id": "c", "client_secret": "s", "created_at": ""}
-        )
-        await client.regenerate_org_credentials()
-        args, kwargs = mock_http.post.call_args
-        assert args[0] == "http://test/org/credentials/regenerate"
-
-    async def test_403_raises_forbidden_error(self, client, mock_http):
-        mock_http.post.return_value = _json_response({"detail": "Forbidden"}, status=403)
-        with pytest.raises(ForbiddenError):
-            await client.regenerate_org_credentials()

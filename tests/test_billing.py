@@ -10,12 +10,14 @@ from teardrop.client import AsyncTeardropClient
 from teardrop.exceptions import NotFoundError, PaymentRequiredError
 from teardrop.models import (
     BillingHistoryEntry,
+    CreditHistoryResponse,
     Invoice,
     StripeTopupRequest,
     StripeTopupResponse,
     StripeTopupStatusResponse,
     UsdcTopupRequest,
     UsdcTopupRequirements,
+    UsdcTopupResponse,
 )
 
 from .conftest import _json_response
@@ -105,16 +107,18 @@ class TestGetInvoice:
 
 class TestGetCreditHistoryOperation:
     async def test_operation_param_forwarded(self, client, mock_http):
-        mock_http.get.return_value = _json_response([])
-        await client.get_credit_history(operation="topup")
+        mock_http.get.return_value = _json_response({"items": [], "next_cursor": None})
+        result = await client.get_credit_history(operation="topup")
         _, kwargs = mock_http.get.call_args
         assert kwargs["params"]["operation"] == "topup"
+        assert isinstance(result, CreditHistoryResponse)
 
     async def test_no_operation_omits_param(self, client, mock_http):
-        mock_http.get.return_value = _json_response([])
-        await client.get_credit_history()
+        mock_http.get.return_value = _json_response({"items": [], "next_cursor": None})
+        result = await client.get_credit_history()
         _, kwargs = mock_http.get.call_args
         assert "operation" not in kwargs["params"]
+        assert isinstance(result, CreditHistoryResponse)
 
 
 # ─── topup_stripe ─────────────────────────────────────────────────────────────
@@ -191,11 +195,15 @@ class TestGetUsdcTopupRequirements:
 
 
 class TestTopupUsdc:
-    async def test_returns_credited_dict(self, client, mock_http):
-        mock_http.post.return_value = _json_response({"credited_usdc": 1_000_000})
+    async def test_returns_credited_response(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {"credited_usdc": 1_000_000, "new_balance_usdc": 2_000_000}
+        )
         request = UsdcTopupRequest(amount_usdc=1_000_000, payment_header="x402-pay-xxx")
         result = await client.topup_usdc(request)
-        assert result == {"credited_usdc": 1_000_000}
+        assert isinstance(result, UsdcTopupResponse)
+        assert result.credited_usdc == 1_000_000
+        assert result.new_balance_usdc == 2_000_000
 
     async def test_request_fields_in_body(self, client, mock_http):
         mock_http.post.return_value = _json_response({"credited_usdc": 500_000})

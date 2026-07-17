@@ -24,7 +24,9 @@ from teardrop.models import (
     BillingHistoryEntry,
     BillingPricingResponse,
     CreditHistoryEntry,
+    CreditHistoryResponse,
     Invoice,
+    InvoiceListResponse,
     UsageSummary,
     Wallet,
 )
@@ -355,9 +357,10 @@ class TestGetInvoices:
             with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
                 result = await client.get_invoices()
 
-        assert len(result) == 1
-        assert isinstance(result[0], Invoice)
-        assert result[0].run_id == "run-1"
+        assert isinstance(result, InvoiceListResponse)
+        assert len(result.items) == 1
+        assert isinstance(result.items[0], Invoice)
+        assert result.items[0].run_id == "run-1"
 
 
 class TestGetCreditHistory:
@@ -371,7 +374,7 @@ class TestGetCreditHistory:
             "reason": None,
             "created_at": "2026-01-01T00:00:00Z",
         }
-        response_data = [entry]
+        response_data = {"items": [entry], "next_cursor": None}
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(response_data))
@@ -381,9 +384,10 @@ class TestGetCreditHistory:
             with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
                 result = await client.get_credit_history()
 
-        assert isinstance(result[0], CreditHistoryEntry)
-        assert result[0].operation == "topup"
-        assert result[0].balance_usdc_after == 500_000
+        assert isinstance(result, CreditHistoryResponse)
+        assert isinstance(result.items[0], CreditHistoryEntry)
+        assert result.items[0].operation == "topup"
+        assert result.items[0].balance_usdc_after == 500_000
 
 
 class TestTopupStripe:

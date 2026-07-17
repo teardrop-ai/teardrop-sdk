@@ -27,6 +27,18 @@ class OrgMcpServer(BaseModel):
     model_config = {"extra": "allow"}
 
 
+McpServerResponse = OrgMcpServer
+
+
+class McpServerDeletedResponse(BaseModel):
+    """Response from DELETE /mcp/servers/{server_id}."""
+
+    id: str
+    deleted_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
 class CreateMcpServerRequest(BaseModel):
     """Request body for POST /mcp/servers."""
 
@@ -75,6 +87,9 @@ class DiscoverMcpToolsResponse(BaseModel):
     discovered_at: str = ""
 
 
+McpDiscoverResponse = DiscoverMcpToolsResponse
+
+
 class TestMcpToolRequest(BaseModel):
     """Request body for POST /mcp/servers/{server_id}/test-tool."""
 
@@ -85,9 +100,14 @@ class TestMcpToolRequest(BaseModel):
 
 
 class TestMcpToolResponse(BaseModel):
-    """Diagnostic result of a test MCP tool invocation (always HTTP 200 on proxy success)."""
+    """Response from POST /mcp/servers/{server_id}/test-tool."""
 
     success: bool
-    latency_ms: int
-    result: dict[str, Any] | None = None
+    latency_ms: int | None = Field(default=None, description="Legacy timing field.")
+    result: dict[str, Any] | None = Field(default=None, description="Legacy result field.")
+    output: dict[str, Any] = Field(
+        default_factory=dict, description="Current output field used by newer backend responses."
+    )
     error: str | None = None
+
+    model_config = {"extra": "allow"}

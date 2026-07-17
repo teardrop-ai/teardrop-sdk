@@ -8,14 +8,15 @@ from typing import Any
 from teardrop.client._core import _LLM_CONFIG_TTL, _MODEL_BENCHMARKS_TTL, _UNSET
 from teardrop.models import (
     MODELS_BY_PROVIDER,
+    LlmConfigDeletedResponse,
+    LlmConfigResponse,
     ModelBenchmarksResponse,
-    OrgLlmConfig,
     SetLlmConfigRequest,
 )
 
 
 class _LlmMixin:
-    async def get_llm_config(self) -> OrgLlmConfig:
+    async def get_llm_config(self) -> LlmConfigResponse:
         now = time.time()
         if self._llm_config_cache is not None and now < self._llm_config_cache[1] + _LLM_CONFIG_TTL:
             return self._llm_config_cache[0]
@@ -23,7 +24,7 @@ class _LlmMixin:
         http = await self._get_http()
         resp = await http.get(f"{self._base_url}/llm-config", headers=await self._headers())
         self._raise_for_status(resp)
-        config = OrgLlmConfig.model_validate(resp.json())
+        config = LlmConfigResponse.model_validate(resp.json())
         self._llm_config_cache = (config, now)
         return config
 
@@ -38,7 +39,7 @@ class _LlmMixin:
         max_tokens: int = 4096,
         temperature: float = 0.0,
         timeout_seconds: int = 120,
-    ) -> OrgLlmConfig:
+    ) -> LlmConfigResponse:
         req_kwargs: dict[str, Any] = dict(
             provider=provider,
             model=model,
@@ -62,7 +63,7 @@ class _LlmMixin:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        config = OrgLlmConfig.model_validate(resp.json())
+        config = LlmConfigResponse.model_validate(resp.json())
         self._llm_config_cache = (config, time.time())
         return config
 
@@ -76,7 +77,7 @@ class _LlmMixin:
         max_tokens: int = 4096,
         temperature: float = 0.0,
         timeout_seconds: int = 120,
-    ) -> OrgLlmConfig:
+    ) -> LlmConfigResponse:
         return await self.set_llm_config(
             provider=provider,
             model=model,
@@ -88,12 +89,12 @@ class _LlmMixin:
             timeout_seconds=timeout_seconds,
         )
 
-    async def delete_llm_config(self) -> dict[str, Any]:
+    async def delete_llm_config(self) -> LlmConfigDeletedResponse:
         http = await self._get_http()
         resp = await http.delete(f"{self._base_url}/llm-config", headers=await self._headers())
         self._raise_for_status(resp)
         self._llm_config_cache = None
-        return resp.json()
+        return LlmConfigDeletedResponse.model_validate(resp.json())
 
     async def get_model_benchmarks(self) -> ModelBenchmarksResponse:
         now = time.time()

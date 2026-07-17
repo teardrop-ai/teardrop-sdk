@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-from teardrop.client._core import _parse_list_response
+from typing import Any
+
 from teardrop.models import (
     CreateOrgToolRequest,
-    OrgTool,
+    OrgToolResponse,
     TestWebhookRequest,
     TestWebhookResponse,
+    ToolDeletedResponse,
     UpdateOrgToolRequest,
 )
 
 
 class _ToolsMixin:
-    async def create_tool(self, request: CreateOrgToolRequest) -> OrgTool:
+    async def create_tool(self, request: CreateOrgToolRequest) -> OrgToolResponse:
         http = await self._get_http()
         resp = await http.post(
             f"{self._base_url}/tools",
@@ -21,21 +23,24 @@ class _ToolsMixin:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return OrgTool.model_validate(resp.json())
+        return OrgToolResponse.model_validate(resp.json())
 
-    async def list_tools(self) -> list[OrgTool]:
+    async def list_tools(self) -> list[OrgToolResponse]:
         http = await self._get_http()
         resp = await http.get(f"{self._base_url}/tools", headers=await self._headers())
         self._raise_for_status(resp)
-        return _parse_list_response(resp.json(), OrgTool, item_container="items")
+        data = resp.json()
+        if isinstance(data, list):
+            return [OrgToolResponse.model_validate(item) for item in data]
+        return [OrgToolResponse.model_validate(item) for item in data.get("items", [])]
 
-    async def get_tool(self, tool_id: str) -> OrgTool:
+    async def get_tool(self, tool_id: str) -> OrgToolResponse:
         http = await self._get_http()
         resp = await http.get(f"{self._base_url}/tools/{tool_id}", headers=await self._headers())
         self._raise_for_status(resp)
-        return OrgTool.model_validate(resp.json())
+        return OrgToolResponse.model_validate(resp.json())
 
-    async def update_tool(self, tool_id: str, request: UpdateOrgToolRequest) -> OrgTool:
+    async def update_tool(self, tool_id: str, request: UpdateOrgToolRequest) -> OrgToolResponse:
         http = await self._get_http()
         resp = await http.patch(
             f"{self._base_url}/tools/{tool_id}",
@@ -43,18 +48,25 @@ class _ToolsMixin:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return OrgTool.model_validate(resp.json())
+        return OrgToolResponse.model_validate(resp.json())
 
-    async def delete_tool(self, tool_id: str) -> None:
+    async def delete_tool(self, tool_id: str) -> ToolDeletedResponse:
         http = await self._get_http()
         resp = await http.delete(f"{self._base_url}/tools/{tool_id}", headers=await self._headers())
         self._raise_for_status(resp)
+        return ToolDeletedResponse.model_validate(resp.json())
 
-    async def test_webhook(self, request: TestWebhookRequest) -> TestWebhookResponse:
+    async def test_webhook(
+        self, request_or_tool_id: TestWebhookRequest | str, payload: dict[str, Any] | None = None
+    ) -> TestWebhookResponse:
         http = await self._get_http()
+        if isinstance(request_or_tool_id, TestWebhookRequest):
+            body: dict[str, Any] = request_or_tool_id.model_dump(exclude_none=True)
+        else:
+            body = {"tool_id": request_or_tool_id, "payload": payload or {}}
         resp = await http.post(
             f"{self._base_url}/tools/test-webhook",
-            json=request.model_dump(exclude_none=True),
+            json=body,
             headers=await self._headers(),
         )
         self._raise_for_status(resp)

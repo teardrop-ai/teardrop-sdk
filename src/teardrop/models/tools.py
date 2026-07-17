@@ -57,7 +57,17 @@ class OrgTool(BaseModel):
     model_config = {"extra": "allow"}
 
 
+OrgToolResponse = OrgTool
 CustomTool = OrgTool
+
+
+class ToolDeletedResponse(BaseModel):
+    """Response from DELETE /tools/{tool_id}."""
+
+    id: str
+    deleted_at: str = ""
+
+    model_config = {"extra": "allow"}
 
 
 class TestWebhookRequest(BaseModel):
@@ -76,6 +86,9 @@ class TestWebhookResponse(BaseModel):
 
     success: bool
     status_code: int | None = None
-    latency_ms: int
+    latency_ms: int | None = None
     response_body: dict[str, Any] | None = None
+    response_preview: str = ""
     error: str | None = None
+
+    model_config = {"extra": "allow"}

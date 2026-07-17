@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 
-from teardrop.client._core import _parse_list_response, _parse_scheduled_runs_page
+from teardrop.client._core import _parse_scheduled_runs_page
 from teardrop.models import (
     CreateEventTriggerRequest,
     EventTrigger,
-    EventTriggerWithSecret,
+    EventTriggerCreatedResponse,
+    EventTriggerListResponse,
+    RotateSecretResponse,
+    ScheduleDeletedResponse,
     ScheduledRunResult,
     ScheduledRunsPage,
     UpdateEventTriggerRequest,
@@ -23,7 +26,7 @@ class EventTriggersModule:
     def __init__(self, client: AsyncTeardropClient) -> None:
         self._c = client
 
-    async def create(self, request: CreateEventTriggerRequest) -> EventTriggerWithSecret:
+    async def create(self, request: CreateEventTriggerRequest) -> EventTriggerCreatedResponse:
         http = await self._c._get_http()
         resp = await http.post(
             f"{self._c._base_url}/agent/event-triggers",
@@ -31,16 +34,16 @@ class EventTriggersModule:
             headers=await self._c._headers(),
         )
         self._c._raise_for_status(resp)
-        return EventTriggerWithSecret.model_validate(resp.json())
+        return EventTriggerCreatedResponse.model_validate(resp.json())
 
-    async def list(self) -> list[EventTrigger]:
+    async def list(self) -> EventTriggerListResponse:
         http = await self._c._get_http()
         resp = await http.get(
             f"{self._c._base_url}/agent/event-triggers",
             headers=await self._c._headers(),
         )
         self._c._raise_for_status(resp)
-        return _parse_list_response(resp.json(), EventTrigger)
+        return EventTriggerListResponse.model_validate(resp.json())
 
     async def get(self, trigger_id: str) -> EventTrigger:
         http = await self._c._get_http()
@@ -61,22 +64,23 @@ class EventTriggersModule:
         self._c._raise_for_status(resp)
         return EventTrigger.model_validate(resp.json())
 
-    async def delete(self, trigger_id: str) -> None:
+    async def delete(self, trigger_id: str) -> ScheduleDeletedResponse:
         http = await self._c._get_http()
         resp = await http.delete(
             f"{self._c._base_url}/agent/event-triggers/{trigger_id}",
             headers=await self._c._headers(),
         )
         self._c._raise_for_status(resp)
+        return ScheduleDeletedResponse.model_validate(resp.json())
 
-    async def rotate_secret(self, trigger_id: str) -> dict[str, str]:
+    async def rotate_secret(self, trigger_id: str) -> RotateSecretResponse:
         http = await self._c._get_http()
         resp = await http.post(
             f"{self._c._base_url}/agent/event-triggers/{trigger_id}/rotate-secret",
             headers=await self._c._headers(),
         )
         self._c._raise_for_status(resp)
-        return resp.json()
+        return RotateSecretResponse.model_validate(resp.json())
 
     async def runs(
         self,
@@ -120,10 +124,10 @@ class _SyncEventTriggersModule:
     def __init__(self, client: TeardropClient) -> None:
         self._c = client
 
-    def create(self, request: CreateEventTriggerRequest) -> EventTriggerWithSecret:
+    def create(self, request: CreateEventTriggerRequest) -> EventTriggerCreatedResponse:
         return self._c._run(self._c._async.event_triggers.create(request))
 
-    def list(self) -> list[EventTrigger]:
+    def list(self) -> EventTriggerListResponse:
         return self._c._run(self._c._async.event_triggers.list())
 
     def get(self, trigger_id: str) -> EventTrigger:
@@ -132,10 +136,10 @@ class _SyncEventTriggersModule:
     def update(self, trigger_id: str, request: UpdateEventTriggerRequest) -> EventTrigger:
         return self._c._run(self._c._async.event_triggers.update(trigger_id, request))
 
-    def delete(self, trigger_id: str) -> None:
+    def delete(self, trigger_id: str) -> ScheduleDeletedResponse:
         return self._c._run(self._c._async.event_triggers.delete(trigger_id))
 
-    def rotate_secret(self, trigger_id: str) -> dict[str, str]:
+    def rotate_secret(self, trigger_id: str) -> RotateSecretResponse:
         return self._c._run(self._c._async.event_triggers.rotate_secret(trigger_id))
 
     def runs(

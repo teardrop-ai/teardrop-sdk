@@ -27,3 +27,21 @@ class _UsageMixin:
         )
         self._raise_for_status(resp)
         return UsageSummary.model_validate(resp.json())
+
+    async def get_admin_usage_org(self, org_id: str) -> UsageSummary:
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/admin/usage/org/{org_id}",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return UsageSummary.model_validate(resp.json())
+
+    async def get_admin_usage_user(self, user_id: str) -> UsageSummary:
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/admin/usage/{user_id}",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return UsageSummary.model_validate(resp.json())

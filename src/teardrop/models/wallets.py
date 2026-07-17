@@ -22,6 +22,13 @@ class Wallet(BaseModel):
     model_config = {"extra": "allow"}
 
 
+WalletItem = Wallet
+
+
+class LinkWalletResponse(Wallet):
+    """Response from POST /wallets/link — alias matching OpenAPI schema."""
+
+
 class AgentWallet(BaseModel):
     """CDP-backed agent wallet provisioned per-org."""
 
@@ -31,5 +38,26 @@ class AgentWallet(BaseModel):
     network: str = ""
     is_active: bool = True
     created_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+AgentWalletResponse = AgentWallet
+
+
+class AgentWalletDeactivatedResponse(BaseModel):
+    """Response from DELETE /wallets/agent."""
+
+    id: str
+    deactivated_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+class WalletDeletedResponse(BaseModel):
+    """Response from DELETE /wallets/{wallet_id}."""
+
+    id: str
+    deleted_at: str = ""
 
     model_config = {"extra": "allow"}

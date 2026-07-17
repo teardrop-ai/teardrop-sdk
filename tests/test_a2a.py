@@ -8,7 +8,12 @@ import pytest
 
 from teardrop.client import AsyncTeardropClient
 from teardrop.exceptions import NotFoundError
-from teardrop.models import AddTrustedAgentRequest, TrustedAgent
+from teardrop.models import (
+    A2AAgentDeletedResponse,
+    A2ADelegationEvent,
+    AddTrustedAgentRequest,
+    TrustedAgent,
+)
 
 from .conftest import _json_response
 
@@ -100,13 +105,18 @@ class TestListTrustedAgents:
 
 
 class TestRemoveTrustedAgent:
-    async def test_returns_none(self, client, mock_http):
-        mock_http.delete.return_value = _json_response({}, status=204)
+    async def test_returns_deleted_response(self, client, mock_http):
+        mock_http.delete.return_value = _json_response(
+            {"id": "ta-1", "deleted_at": "2026-01-01T00:00:00Z"}
+        )
         result = await client.remove_trusted_agent("ta-1")
-        assert result is None
+        assert isinstance(result, A2AAgentDeletedResponse)
+        assert result.id == "ta-1"
 
     async def test_correct_url(self, client, mock_http):
-        mock_http.delete.return_value = _json_response({}, status=204)
+        mock_http.delete.return_value = _json_response(
+            {"id": "ta-abc", "deleted_at": "2026-01-01T00:00:00Z"}
+        )
         await client.remove_trusted_agent("ta-abc")
         args, _ = mock_http.delete.call_args
         assert args[0] == "http://test/a2a/agents/ta-abc"
@@ -121,10 +131,20 @@ class TestRemoveTrustedAgent:
 
 
 class TestGetDelegations:
-    async def test_returns_list_of_dicts(self, client, mock_http):
-        mock_http.get.return_value = _json_response([{"id": "d-1"}, {"id": "d-2"}])
+    async def test_returns_list_of_events(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "items": [
+                    {"id": "d-1", "agent_id": "a-1", "status": "pending"},
+                    {"id": "d-2", "agent_id": "a-2", "status": "completed"},
+                ],
+                "next_cursor": None,
+            }
+        )
         result = await client.get_delegations()
-        assert result == [{"id": "d-1"}, {"id": "d-2"}]
+        assert len(result) == 2
+        assert isinstance(result[0], A2ADelegationEvent)
+        assert result[0].id == "d-1"
 
     async def test_limit_param_forwarded(self, client, mock_http):
         mock_http.get.return_value = _json_response([])

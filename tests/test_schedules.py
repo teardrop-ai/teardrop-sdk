@@ -8,7 +8,9 @@ from pydantic import ValidationError
 from teardrop.exceptions import NotFoundError
 from teardrop.models import (
     CreateScheduleRequest,
+    ScheduleDeletedResponse,
     ScheduledRun,
+    ScheduledRunListResponse,
     ScheduledRunResult,
     ScheduledRunsPage,
     UpdateScheduleRequest,
@@ -113,13 +115,14 @@ class TestScheduleRequestValidation:
 
 class TestSchedulesList:
     async def test_returns_schedule_list(self, client, mock_http):
-        mock_http.get.return_value = _json_response([_SCHEDULE])
+        mock_http.get.return_value = _json_response({"items": [_SCHEDULE], "next_cursor": None})
 
         result = await client.schedules.list()
 
-        assert len(result) == 1
-        assert isinstance(result[0], ScheduledRun)
-        assert result[0].name == "Daily Summary"
+        assert isinstance(result, ScheduledRunListResponse)
+        assert len(result.items) == 1
+        assert isinstance(result.items[0], ScheduledRun)
+        assert result.items[0].name == "Daily Summary"
 
 
 class TestSchedulesGet:
@@ -156,12 +159,15 @@ class TestSchedulesUpdate:
 
 
 class TestSchedulesDelete:
-    async def test_returns_none(self, client, mock_http):
-        mock_http.delete.return_value = _json_response({}, status=204)
+    async def test_returns_deleted_response(self, client, mock_http):
+        mock_http.delete.return_value = _json_response(
+            {"id": _SCHEDULE["id"], "deleted_at": "2026-01-01T00:00:00Z"}
+        )
 
         result = await client.schedules.delete(_SCHEDULE["id"])
 
-        assert result is None
+        assert isinstance(result, ScheduleDeletedResponse)
+        assert result.id == _SCHEDULE["id"]
 
 
 class TestSchedulesRuns:

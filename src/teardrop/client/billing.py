@@ -4,18 +4,19 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from teardrop.client._core import _parse_list_response
 from teardrop.models import (
     BillingBalance,
     BillingHistoryEntry,
     BillingPricingResponse,
-    CreditHistoryEntry,
+    CreditHistoryResponse,
     Invoice,
+    InvoiceListResponse,
+    StripeSessionStatusResponse,
     StripeTopupRequest,
     StripeTopupResponse,
-    StripeTopupStatusResponse,
     UsdcTopupRequest,
-    UsdcTopupRequirements,
+    UsdcTopupRequirementsResponse,
+    UsdcTopupResponse,
 )
 
 
@@ -41,9 +42,12 @@ class _BillingMixin:
             params=params,
         )
         self._raise_for_status(resp)
-        return _parse_list_response(resp.json(), BillingHistoryEntry)
+        data = resp.json()
+        if isinstance(data, list):
+            return [BillingHistoryEntry.model_validate(item) for item in data]
+        return [BillingHistoryEntry.model_validate(item) for item in data.get("items", [])]
 
-    async def get_invoices(self, *, limit: int = 20) -> list[Invoice]:
+    async def get_invoices(self, *, limit: int = 20) -> InvoiceListResponse:
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
         resp = await http.get(
@@ -52,7 +56,7 @@ class _BillingMixin:
             params=params,
         )
         self._raise_for_status(resp)
-        return _parse_list_response(resp.json(), Invoice, item_container="items")
+        return InvoiceListResponse.model_validate(resp.json())
 
     async def get_invoice(self, run_id: str) -> Invoice:
         http = await self._get_http()
@@ -65,7 +69,7 @@ class _BillingMixin:
 
     async def get_credit_history(
         self, *, limit: int = 20, operation: Literal["debit", "topup"] | None = None
-    ) -> list[CreditHistoryEntry]:
+    ) -> CreditHistoryResponse:
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
         if operation:
@@ -76,7 +80,7 @@ class _BillingMixin:
             params=params,
         )
         self._raise_for_status(resp)
-        return _parse_list_response(resp.json(), CreditHistoryEntry, item_container="items")
+        return CreditHistoryResponse.model_validate(resp.json())
 
     async def topup_stripe(self, request: StripeTopupRequest) -> StripeTopupResponse:
         http = await self._get_http()
@@ -88,7 +92,7 @@ class _BillingMixin:
         self._raise_for_status(resp)
         return StripeTopupResponse.model_validate(resp.json())
 
-    async def get_stripe_topup_status(self, session_id: str) -> StripeTopupStatusResponse:
+    async def get_stripe_topup_status(self, session_id: str) -> StripeSessionStatusResponse:
         http = await self._get_http()
         resp = await http.get(
             f"{self._base_url}/billing/topup/stripe/status",
@@ -96,9 +100,9 @@ class _BillingMixin:
             params={"session_id": session_id},
         )
         self._raise_for_status(resp)
-        return StripeTopupStatusResponse.model_validate(resp.json())
+        return StripeSessionStatusResponse.model_validate(resp.json())
 
-    async def get_usdc_topup_requirements(self, amount_usdc: int) -> UsdcTopupRequirements:
+    async def get_usdc_topup_requirements(self, amount_usdc: int) -> UsdcTopupRequirementsResponse:
         http = await self._get_http()
         resp = await http.get(
             f"{self._base_url}/billing/topup/usdc/requirements",
@@ -106,9 +110,9 @@ class _BillingMixin:
             params={"amount_usdc": amount_usdc},
         )
         self._raise_for_status(resp)
-        return UsdcTopupRequirements.model_validate(resp.json())
+        return UsdcTopupRequirementsResponse.model_validate(resp.json())
 
-    async def topup_usdc(self, request: UsdcTopupRequest) -> dict[str, Any]:
+    async def topup_usdc(self, request: UsdcTopupRequest) -> UsdcTopupResponse:
         http = await self._get_http()
         resp = await http.post(
             f"{self._base_url}/billing/topup/usdc",
@@ -116,4 +120,4 @@ class _BillingMixin:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return resp.json()
+        return UsdcTopupResponse.model_validate(resp.json())
