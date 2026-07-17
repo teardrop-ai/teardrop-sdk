@@ -8,7 +8,12 @@ import pytest
 
 from teardrop.client import AsyncTeardropClient
 from teardrop.exceptions import AuthenticationError, ConflictError, ValidationError
-from teardrop.models import TokenResponse
+from teardrop.models import (
+    ResendVerificationResponse,
+    SiweNonceResponse,
+    TokenResponse,
+    VerifyEmailResponse,
+)
 
 from .conftest import _json_response, _make_jwt
 
@@ -43,10 +48,11 @@ def _token_response_dict() -> dict:
 
 
 class TestGetSiweNonce:
-    async def test_returns_dict_with_nonce(self, client, mock_http):
+    async def test_returns_nonce_response(self, client, mock_http):
         mock_http.get.return_value = _json_response({"nonce": "abc123"})
         result = await client.get_siwe_nonce()
-        assert result == {"nonce": "abc123"}
+        assert isinstance(result, SiweNonceResponse)
+        assert result.nonce == "abc123"
         mock_http.get.assert_called_once_with("http://test/auth/siwe/nonce")
 
     async def test_401_raises_auth_error(self, client, mock_http):
@@ -180,11 +186,11 @@ class TestVerifyEmail:
         _, kwargs = mock_http.get.call_args
         assert kwargs["params"] == {"token": "one-time-token"}
 
-    async def test_returns_dict(self, client, mock_http):
+    async def test_returns_verify_response(self, client, mock_http):
         mock_http.get.return_value = _json_response({"message": "verified"})
         result = await client.verify_email("tok")
-        assert isinstance(result, dict)
-        assert result["message"] == "verified"
+        assert isinstance(result, VerifyEmailResponse)
+        assert result.message == "verified"
 
 
 # ─── resend_verification ──────────────────────────────────────────────────────
@@ -197,10 +203,11 @@ class TestResendVerification:
         _, kwargs = mock_http.post.call_args
         assert kwargs["json"] == {"email": "u@example.com"}
 
-    async def test_returns_dict(self, client, mock_http):
+    async def test_returns_resend_response(self, client, mock_http):
         mock_http.post.return_value = _json_response({"message": "sent"})
         result = await client.resend_verification("u@example.com")
-        assert isinstance(result, dict)
+        assert isinstance(result, ResendVerificationResponse)
+        assert result.message == "sent"
 
 
 # ─── invite ───────────────────────────────────────────────────────────────────

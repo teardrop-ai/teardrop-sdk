@@ -9,7 +9,10 @@ from teardrop.exceptions import NotFoundError
 from teardrop.models import (
     CreateEventTriggerRequest,
     EventTrigger,
+    EventTriggerListResponse,
     EventTriggerWithSecret,
+    RotateSecretResponse,
+    ScheduleDeletedResponse,
     ScheduledRunResult,
     ScheduledRunsPage,
     UpdateEventTriggerRequest,
@@ -95,14 +98,15 @@ class TestEventTriggersList:
             for key, value in _TRIGGER.items()
             if key not in {"trigger_token", "event_path"}
         }
-        mock_http.get.return_value = _json_response([trigger])
+        mock_http.get.return_value = _json_response({"items": [trigger], "next_cursor": None})
 
         result = await client.event_triggers.list()
 
-        assert len(result) == 1
-        assert isinstance(result[0], EventTrigger)
-        assert result[0].trigger_token is None
-        assert result[0].event_path is None
+        assert isinstance(result, EventTriggerListResponse)
+        assert len(result.items) == 1
+        assert isinstance(result.items[0], EventTrigger)
+        assert result.items[0].trigger_token is None
+        assert result.items[0].event_path is None
 
 
 class TestEventTriggersGet:
@@ -138,23 +142,32 @@ class TestEventTriggersUpdate:
 
 
 class TestEventTriggersDelete:
-    async def test_returns_none(self, client, mock_http):
-        mock_http.delete.return_value = _json_response({}, status=204)
+    async def test_returns_deleted_response(self, client, mock_http):
+        mock_http.delete.return_value = _json_response(
+            {"id": _TRIGGER["id"], "deleted_at": "2026-01-01T00:00:00Z"}
+        )
 
         result = await client.event_triggers.delete(_TRIGGER["id"])
 
-        assert result is None
+        assert isinstance(result, ScheduleDeletedResponse)
+        assert result.id == _TRIGGER["id"]
 
 
 class TestEventTriggersRotateSecret:
-    async def test_returns_plain_secret_payload(self, client, mock_http):
+    async def test_returns_rotate_secret_response(self, client, mock_http):
         mock_http.post.return_value = _json_response(
-            {"id": _TRIGGER["id"], "secret": "rotated_secret_value"}
+            {
+                "id": _TRIGGER["id"],
+                "secret": "rotated_secret_value",
+                "rotated_at": "2026-01-01T00:00:00Z",
+            }
         )
 
         result = await client.event_triggers.rotate_secret(_TRIGGER["id"])
 
-        assert result == {"id": _TRIGGER["id"], "secret": "rotated_secret_value"}
+        assert isinstance(result, RotateSecretResponse)
+        assert result.id == _TRIGGER["id"]
+        assert result.secret == "rotated_secret_value"
 
 
 class TestEventTriggersRuns:

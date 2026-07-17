@@ -13,6 +13,7 @@ from teardrop.client import _LLM_CONFIG_TTL, _MODEL_BENCHMARKS_TTL, AsyncTeardro
 from teardrop.exceptions import AuthenticationError, NotFoundError
 from teardrop.models import (
     MODELS_BY_PROVIDER,
+    LlmConfigDeletedResponse,
     ModelBenchmarksResponse,
     OrgLlmConfig,
     SetLlmConfigRequest,
@@ -307,24 +308,29 @@ class TestSetLlmConfig:
 
 class TestDeleteLlmConfig:
     @pytest.mark.asyncio
-    async def test_returns_deleted_status(self):
+    async def test_returns_deleted_response(self):
         mock_http = AsyncMock()
         mock_http.is_closed = False
-        mock_http.delete = AsyncMock(return_value=_json_response({"status": "deleted"}))
+        mock_http.delete = AsyncMock(
+            return_value=_json_response({"org_id": "org-1", "deleted_at": "2026-01-01T00:00:00Z"})
+        )
 
         async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
             client._http = mock_http
             with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
                 result = await client.delete_llm_config()
 
-        assert result == {"status": "deleted"}
+        assert isinstance(result, LlmConfigDeletedResponse)
+        assert result.org_id == "org-1"
 
     @pytest.mark.asyncio
     async def test_delete_clears_cache(self):
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(_ORG_LLM_CONFIG))
-        mock_http.delete = AsyncMock(return_value=_json_response({"status": "deleted"}))
+        mock_http.delete = AsyncMock(
+            return_value=_json_response({"org_id": "org-1", "deleted_at": "2026-01-01T00:00:00Z"})
+        )
 
         async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
             client._http = mock_http

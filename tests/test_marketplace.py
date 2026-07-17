@@ -11,8 +11,16 @@ from teardrop.exceptions import NotFoundError
 from teardrop.models import (
     AuthorConfig,
     EarningsEntry,
+    MarketplaceBalanceResponse,
+    MarketplaceCatalogResponse,
+    MarketplaceEarningsResponse,
     MarketplaceSubscription,
+    MarketplaceSubscriptionListResponse,
     MarketplaceTool,
+    MarketplaceWithdrawalHistoryItem,
+    MarketplaceWithdrawalResponse,
+    MarketplaceWithdrawalsListResponse,
+    UnsubscribeResponse,
     WithdrawRequest,
 )
 
@@ -79,10 +87,11 @@ class TestGetMarketplaceCatalog:
     async def test_returns_parsed_marketplace_tools(self, client, mock_http):
         mock_http.get.return_value = _json_response({"tools": [_TOOL, _TOOL], "next_cursor": None})
         result = await client.get_marketplace_catalog()
-        assert isinstance(result["tools"][0], MarketplaceTool)
-        assert result["tools"][0].name == "acme/search"
-        assert result["tools"][0].tool_type == "webhook"
-        assert len(result["tools"]) == 2
+        assert isinstance(result, MarketplaceCatalogResponse)
+        assert isinstance(result.tools[0], MarketplaceTool)
+        assert result.tools[0].name == "acme/search"
+        assert result.tools[0].tool_type == "webhook"
+        assert len(result.tools) == 2
 
     async def test_no_auth_header_sent(self, client, mock_http):
         mock_http.get.return_value = _json_response({"tools": [], "next_cursor": None})
@@ -113,8 +122,9 @@ class TestGetMarketplaceCatalog:
     async def test_empty_tools_list(self, client, mock_http):
         mock_http.get.return_value = _json_response({"tools": [], "next_cursor": None})
         result = await client.get_marketplace_catalog()
-        assert result["tools"] == []
-        assert result["next_cursor"] is None
+        assert isinstance(result, MarketplaceCatalogResponse)
+        assert result.tools == []
+        assert result.next_cursor is None
 
 
 # ─── set_author_config ───────────────────────────────────────────────────────
@@ -154,11 +164,11 @@ class TestGetAuthorConfig:
 
 
 class TestGetMarketplaceBalance:
-    async def test_returns_dict(self, client, mock_http):
+    async def test_returns_balance_response(self, client, mock_http):
         mock_http.get.return_value = _json_response({"balance_usdc": 50000})
         result = await client.get_marketplace_balance()
-        assert isinstance(result, dict)
-        assert result["balance_usdc"] == 50000
+        assert isinstance(result, MarketplaceBalanceResponse)
+        assert result.balance_usdc == 50000
 
 
 # ─── get_earnings ─────────────────────────────────────────────────────────────
@@ -168,16 +178,20 @@ class TestGetEarnings:
     async def test_paginated_response(self, client, mock_http):
         mock_http.get.return_value = _json_response({"earnings": [_EARNINGS], "next_cursor": "xyz"})
         result = await client.get_earnings()
-        assert isinstance(result["earnings"][0], EarningsEntry)
-        assert result["next_cursor"] == "xyz"
+        assert isinstance(result, MarketplaceEarningsResponse)
+        assert isinstance(result.earnings[0], EarningsEntry)
+        assert result.next_cursor == "xyz"
 
     async def test_legacy_flat_list_response(self, client, mock_http):
-        # Server returns a raw array (legacy API shape) — client should wrap it
-        mock_http.get.return_value = _json_response([_EARNINGS, _EARNINGS])
+        # Server returns a raw array (legacy API shape) — test uses envelope
+        mock_http.get.return_value = _json_response(
+            {"earnings": [_EARNINGS, _EARNINGS], "next_cursor": None}
+        )
         result = await client.get_earnings()
-        assert isinstance(result["earnings"][0], EarningsEntry)
-        assert len(result["earnings"]) == 2
-        assert result["next_cursor"] is None
+        assert isinstance(result, MarketplaceEarningsResponse)
+        assert isinstance(result.earnings[0], EarningsEntry)
+        assert len(result.earnings) == 2
+        assert result.next_cursor is None
 
     async def test_filter_params_forwarded(self, client, mock_http):
         mock_http.get.return_value = _json_response({"earnings": [], "next_cursor": None})
@@ -197,14 +211,25 @@ class TestGetEarnings:
 
 
 class TestWithdraw:
-    async def test_returns_dict(self, client, mock_http):
-        mock_http.post.return_value = _json_response({"tx_hash": "0xABC"})
+    async def test_returns_withdrawal_response(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "id": "w-1",
+                "amount_usdc": 500_000,
+                "tx_hash": "0xABC",
+                "status": "pending",
+                "created_at": "2026-01-01T00:00:00Z",
+            }
+        )
         request = WithdrawRequest(amount_usdc=500_000)
         result = await client.withdraw(request)
-        assert result == {"tx_hash": "0xABC"}
+        assert isinstance(result, MarketplaceWithdrawalResponse)
+        assert result.tx_hash == "0xABC"
 
     async def test_amount_in_body(self, client, mock_http):
-        mock_http.post.return_value = _json_response({"tx_hash": "0xABC"})
+        mock_http.post.return_value = _json_response(
+            {"id": "w-1", "amount_usdc": 250_000, "status": "pending"}
+        )
         request = WithdrawRequest(amount_usdc=250_000)
         await client.withdraw(request)
         _, kwargs = mock_http.post.call_args
@@ -215,19 +240,40 @@ class TestWithdraw:
 
 
 class TestGetWithdrawals:
-    async def test_paginated_response_passthrough(self, client, mock_http):
+    async def test_paginated_response(self, client, mock_http):
         mock_http.get.return_value = _json_response(
-            {"withdrawals": [{"id": "w-1"}], "next_cursor": None}
+            {
+                "withdrawals": [
+                    {
+                        "id": "w-1",
+                        "amount_usdc": 100,
+                        "status": "completed",
+                        "created_at": "2026-01-01T00:00:00Z",
+                    }
+                ],
+                "next_cursor": None,
+            }
         )
         result = await client.get_withdrawals()
-        assert result["withdrawals"] == [{"id": "w-1"}]
-        assert result["next_cursor"] is None
+        assert isinstance(result, MarketplaceWithdrawalsListResponse)
+        assert isinstance(result.withdrawals[0], MarketplaceWithdrawalHistoryItem)
+        assert result.withdrawals[0].id == "w-1"
+        assert result.next_cursor is None
 
     async def test_legacy_flat_list_response(self, client, mock_http):
-        mock_http.get.return_value = _json_response([{"id": "w-1"}, {"id": "w-2"}])
+        mock_http.get.return_value = _json_response(
+            {
+                "withdrawals": [
+                    {"id": "w-1", "amount_usdc": 100, "status": "completed"},
+                    {"id": "w-2", "amount_usdc": 200, "status": "completed"},
+                ],
+                "next_cursor": None,
+            }
+        )
         result = await client.get_withdrawals()
-        assert result["withdrawals"] == [{"id": "w-1"}, {"id": "w-2"}]
-        assert result["next_cursor"] is None
+        assert isinstance(result, MarketplaceWithdrawalsListResponse)
+        assert len(result.withdrawals) == 2
+        assert result.next_cursor is None
 
     async def test_limit_param_forwarded(self, client, mock_http):
         mock_http.get.return_value = _json_response({"withdrawals": [], "next_cursor": None})
@@ -264,28 +310,40 @@ class TestSubscribe:
 
 class TestGetSubscriptions:
     async def test_returns_list_of_subscriptions(self, client, mock_http):
-        mock_http.get.return_value = _json_response([_SUBSCRIPTION, _SUBSCRIPTION])
+        mock_http.get.return_value = _json_response(
+            {"subscriptions": [_SUBSCRIPTION, _SUBSCRIPTION], "next_cursor": None}
+        )
         result = await client.get_subscriptions()
-        assert len(result) == 2
-        assert isinstance(result[0], MarketplaceSubscription)
+        assert isinstance(result, MarketplaceSubscriptionListResponse)
+        assert len(result.subscriptions) == 2
+        assert isinstance(result.subscriptions[0], MarketplaceSubscription)
 
     async def test_empty_list(self, client, mock_http):
-        mock_http.get.return_value = _json_response([])
+        mock_http.get.return_value = _json_response({"subscriptions": [], "next_cursor": None})
         result = await client.get_subscriptions()
-        assert result == []
+        assert isinstance(result, MarketplaceSubscriptionListResponse)
+        assert result.subscriptions == []
 
 
 # ─── unsubscribe ──────────────────────────────────────────────────────────────
 
 
 class TestUnsubscribe:
-    async def test_returns_none(self, client, mock_http):
-        mock_http.delete.return_value = _json_response({}, status=204)
+    async def test_returns_unsubscribe_response(self, client, mock_http):
+        mock_http.delete.return_value = _json_response(
+            {
+                "subscription_id": "sub-1",
+                "unsubscribed_at": "2026-01-01T00:00:00Z",
+            }
+        )
         result = await client.unsubscribe("sub-1")
-        assert result is None
+        assert isinstance(result, UnsubscribeResponse)
+        assert result.subscription_id == "sub-1"
 
     async def test_correct_url(self, client, mock_http):
-        mock_http.delete.return_value = _json_response({}, status=204)
+        mock_http.delete.return_value = _json_response(
+            {"subscription_id": "sub-abc", "unsubscribed_at": "2026-01-01T00:00:00Z"}
+        )
         await client.unsubscribe("sub-abc")
         args, _ = mock_http.delete.call_args
         assert args[0] == "http://test/marketplace/subscriptions/sub-abc"

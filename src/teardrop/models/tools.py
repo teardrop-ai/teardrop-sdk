@@ -57,4 +57,14 @@ class OrgTool(BaseModel):
     model_config = {"extra": "allow"}
 
 
+OrgToolResponse = OrgTool
 CustomTool = OrgTool
+
+
+class ToolDeletedResponse(BaseModel):
+    """Response from DELETE /tools/{tool_id}."""
+
+    id: str
+    deleted_at: str = ""
+
+    model_config = {"extra": "allow"}

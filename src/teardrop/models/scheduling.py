@@ -37,6 +37,16 @@ class ScheduledRun(BaseModel):
     model_config = {"extra": "allow"}
 
 
+ScheduledRunItem = ScheduledRun
+
+
+class ScheduledRunListResponse(BaseModel):
+    """Response from GET /agent/schedules."""
+
+    items: list[ScheduledRun] = Field(default_factory=list)
+    next_cursor: str | None = None
+
+
 class ScheduledRunResult(BaseModel):
     id: str
     schedule_id: str
@@ -51,7 +61,17 @@ class ScheduledRunResult(BaseModel):
     model_config = {"extra": "allow"}
 
 
+ScheduledRunResultItem = ScheduledRunResult
+
+
 class ScheduledRunsPage(BaseModel):
+    items: list[ScheduledRunResult] = Field(default_factory=list)
+    next_cursor: str | None = None
+
+
+class ScheduledRunResultsResponse(BaseModel):
+    """Alias matching OpenAPI schema for schedule/trigger run lists."""
+
     items: list[ScheduledRunResult] = Field(default_factory=list)
     next_cursor: str | None = None
 
@@ -100,8 +120,22 @@ class EventTrigger(BaseModel):
     model_config = {"extra": "allow"}
 
 
+EventTriggerItem = EventTrigger
+
+
+class EventTriggerListResponse(BaseModel):
+    """Response from GET /agent/event-triggers."""
+
+    items: list[EventTrigger] = Field(default_factory=list)
+    next_cursor: str | None = None
+
+
 class EventTriggerWithSecret(EventTrigger):
     secret: str
+
+
+class EventTriggerCreatedResponse(EventTriggerWithSecret):
+    """Response from POST /agent/event-triggers."""
 
 
 class CreateEventTriggerRequest(BaseModel):
@@ -125,3 +159,22 @@ class UpdateEventTriggerRequest(BaseModel):
     @classmethod
     def _validate_callback_url(cls, value: str | None) -> str | None:
         return _validate_https_callback_url(value)
+
+
+class ScheduleDeletedResponse(BaseModel):
+    """Response from DELETE /agent/schedules/{schedule_id}."""
+
+    id: str
+    deleted_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+class RotateSecretResponse(BaseModel):
+    """Response from POST /agent/event-triggers/{schedule_id}/rotate-secret."""
+
+    id: str
+    secret: str
+    rotated_at: str = ""
+
+    model_config = {"extra": "allow"}

@@ -38,6 +38,9 @@ class AgentTool(BaseModel):
     access_mode: Literal["included", "subscribed"]
 
 
+AgentToolItem = AgentTool
+
+
 class AgentToolsResponse(BaseModel):
     """Envelope response from GET /agent/tools."""
 
@@ -51,5 +54,77 @@ class AgentCard(BaseModel):
     description: str = ""
     url: str = ""
     skills: list[dict[str, Any]] = Field(default_factory=list)
+
+    model_config = {"extra": "allow"}
+
+
+class AgentDecisionRecord(BaseModel):
+    """Item inside AgentDecisionListResponse."""
+
+    id: str
+    run_id: str
+    tool_name: str
+    decision: str
+    created_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+class AgentDecisionListResponse(BaseModel):
+    """Response from GET /agent/decisions."""
+
+    items: list[AgentDecisionRecord] = Field(default_factory=list)
+    next_cursor: str | None = None
+
+
+class RunOutcomeResponse(BaseModel):
+    """Response from PATCH /agent/runs/{run_id}/outcome."""
+
+    run_id: str
+    outcome: str
+    updated_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+class EventDispatchResponse(BaseModel):
+    """Response from POST /agent/events/{trigger_token}."""
+
+    accepted: bool
+    run_id: str | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class ToolExclusionListResponse(BaseModel):
+    """Response from GET /agent/tool-exclusions."""
+
+    exclusions: list[str] = Field(default_factory=list)
+
+
+class ToolExclusionActionResponse(BaseModel):
+    """Response from POST /agent/tool-exclusions."""
+
+    tool_name: str
+    excluded: bool
+
+    model_config = {"extra": "allow"}
+
+
+class ToolExclusionRemovedResponse(BaseModel):
+    """Response from DELETE /agent/tool-exclusions/{tool_name}."""
+
+    tool_name: str
+    removed: bool
+
+    model_config = {"extra": "allow"}
+
+
+class TestWebhookResponse(BaseModel):
+    """Response from POST /tools/test-webhook."""
+
+    success: bool
+    status_code: int | None = None
+    response_preview: str = ""
 
     model_config = {"extra": "allow"}

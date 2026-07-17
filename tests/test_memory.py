@@ -8,7 +8,12 @@ import pytest
 
 from teardrop.client import AsyncTeardropClient
 from teardrop.exceptions import NotFoundError
-from teardrop.models import MemoryEntry, StoreMemoryRequest
+from teardrop.models import (
+    MemoryDeletedResponse,
+    MemoryEntry,
+    MemoryListResponse,
+    StoreMemoryRequest,
+)
 
 from .conftest import _json_response
 
@@ -37,22 +42,26 @@ _MEMORY = {"id": "m-1", "content": "Remember this", "created_at": "2026-01-01T00
 
 class TestListMemories:
     async def test_returns_list_of_memory_entries(self, client, mock_http):
-        mock_http.get.return_value = _json_response([_MEMORY, _MEMORY])
+        mock_http.get.return_value = _json_response(
+            {"items": [_MEMORY, _MEMORY], "next_cursor": None}
+        )
         result = await client.list_memories()
-        assert len(result) == 2
-        assert isinstance(result[0], MemoryEntry)
-        assert result[0].content == "Remember this"
+        assert isinstance(result, MemoryListResponse)
+        assert len(result.items) == 2
+        assert isinstance(result.items[0], MemoryEntry)
+        assert result.items[0].content == "Remember this"
 
     async def test_limit_param_forwarded(self, client, mock_http):
-        mock_http.get.return_value = _json_response([_MEMORY])
+        mock_http.get.return_value = _json_response({"items": [_MEMORY], "next_cursor": None})
         await client.list_memories(limit=10)
         _, kwargs = mock_http.get.call_args
         assert kwargs["params"] == {"limit": 10}
 
     async def test_empty_list(self, client, mock_http):
-        mock_http.get.return_value = _json_response([])
+        mock_http.get.return_value = _json_response({"items": [], "next_cursor": None})
         result = await client.list_memories()
-        assert result == []
+        assert isinstance(result, MemoryListResponse)
+        assert result.items == []
 
 
 # ─── create_memory ────────────────────────────────────────────────────────────
@@ -85,13 +94,18 @@ class TestCreateMemory:
 
 
 class TestDeleteMemory:
-    async def test_returns_none_on_204(self, client, mock_http):
-        mock_http.delete.return_value = _json_response({}, status=204)
+    async def test_returns_deleted_response(self, client, mock_http):
+        mock_http.delete.return_value = _json_response(
+            {"id": "m-1", "deleted_at": "2026-01-01T00:00:00Z"}
+        )
         result = await client.delete_memory("m-1")
-        assert result is None
+        assert isinstance(result, MemoryDeletedResponse)
+        assert result.id == "m-1"
 
     async def test_correct_url(self, client, mock_http):
-        mock_http.delete.return_value = _json_response({}, status=204)
+        mock_http.delete.return_value = _json_response(
+            {"id": "m-abc", "deleted_at": "2026-01-01T00:00:00Z"}
+        )
         await client.delete_memory("m-abc")
         args, _ = mock_http.delete.call_args
         assert args[0] == "http://test/memories/m-abc"

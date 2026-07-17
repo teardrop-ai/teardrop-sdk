@@ -27,6 +27,18 @@ class OrgMcpServer(BaseModel):
     model_config = {"extra": "allow"}
 
 
+McpServerResponse = OrgMcpServer
+
+
+class McpServerDeletedResponse(BaseModel):
+    """Response from DELETE /mcp/servers/{server_id}."""
+
+    id: str
+    deleted_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
 class CreateMcpServerRequest(BaseModel):
     """Request body for POST /mcp/servers."""
 
@@ -73,3 +85,16 @@ class DiscoverMcpToolsResponse(BaseModel):
     server_name: str = ""
     tools: list[McpToolDefinition]
     discovered_at: str = ""
+
+
+McpDiscoverResponse = DiscoverMcpToolsResponse
+
+
+class TestMcpToolResponse(BaseModel):
+    """Response from POST /mcp/servers/{server_id}/test-tool."""
+
+    success: bool
+    output: dict[str, Any] = Field(default_factory=dict)
+    error: str = ""
+
+    model_config = {"extra": "allow"}

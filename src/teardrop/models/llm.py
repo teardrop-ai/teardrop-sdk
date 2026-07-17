@@ -86,3 +86,16 @@ class ModelBenchmarksResponse(BaseModel):
 
     models: list[ModelInfo] = Field(default_factory=list)
     updated_at: str = ""
+
+
+class LlmConfigResponse(OrgLlmConfig):
+    """Alias matching the OpenAPI schema name for /llm-config endpoints."""
+
+
+class LlmConfigDeletedResponse(BaseModel):
+    """Response from DELETE /llm-config."""
+
+    org_id: str
+    deleted_at: str = ""
+
+    model_config = {"extra": "allow"}

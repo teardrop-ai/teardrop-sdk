@@ -13,7 +13,7 @@ from teardrop.exceptions import (
     TeardropError,
     ValidationError,
 )
-from teardrop.models import (
+from teardrop.models import (  # noqa: F401
     MODELS_BY_PROVIDER,
     AddTrustedAgentRequest,
     AgentCard,
@@ -26,7 +26,6 @@ from teardrop.models import (
     BillingHistoryEntry,
     BillingPricingResponse,
     CreateCustomToolRequest,
-    # Backward-compat aliases
     CreateEventTriggerRequest,
     CreateMcpServerRequest,
     CreateOrgToolRequest,

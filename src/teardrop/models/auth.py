@@ -39,3 +39,73 @@ class MeResponse(JwtPayloadBase):
     """Response from GET /auth/me with org metadata."""
 
     org_name: str = ""
+
+
+class AuthMeResponse(MeResponse):
+    """Alias matching the OpenAPI schema name for GET /auth/me."""
+
+
+class SiweNonceResponse(BaseModel):
+    """Response from GET /auth/siwe/nonce."""
+
+    nonce: str
+
+    model_config = {"extra": "allow"}
+
+
+class VerifyEmailResponse(BaseModel):
+    """Response from GET /auth/verify-email."""
+
+    message: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+class ResendVerificationResponse(BaseModel):
+    """Response from POST /auth/resend-verification."""
+
+    message: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+class CreateInviteResponse(BaseModel):
+    """Response from POST /org/invite."""
+
+    invite_url: str
+    email: str | None = None
+    role: str = "member"
+    expires_at: str | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class CreateUserResponse(BaseModel):
+    """Response from POST /admin/users."""
+
+    id: str
+    email: str
+    org_id: str
+    created_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+class CreateOrgResponse(BaseModel):
+    """Response from POST /admin/orgs."""
+
+    id: str
+    name: str
+    created_at: str = ""
+
+    model_config = {"extra": "allow"}
+
+
+class CreateClientCredentialsResponse(BaseModel):
+    """Response from POST /admin/client-credentials."""
+
+    client_id: str
+    client_secret: str
+    created_at: str = ""
+
+    model_config = {"extra": "allow"}
