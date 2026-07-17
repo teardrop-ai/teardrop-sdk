@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ToolPolicy(BaseModel):
@@ -133,15 +133,25 @@ class AgentDecisionsResponse(BaseModel):
 
 
 class EventDispatchResponse(BaseModel):
-    """Response from POST /agent/events/{trigger_token}."""
+    """Response from POST /agent/events/{trigger_token}.
 
-    accepted: bool
+    The spec's response body has no ``accepted`` field (only ``status``,
+    one of "accepted"/"duplicate"); ``accepted`` is derived for convenience.
+    """
+
     run_id: str | None
     status: str
     schedule_id: str | None
     result_path: str | None
+    accepted: bool = True
 
     model_config = {"extra": "allow"}
+
+    @model_validator(mode="after")
+    def _derive_accepted(self) -> "EventDispatchResponse":
+        if "accepted" not in self.model_fields_set:
+            self.accepted = self.status == "accepted"
+        return self
 
 
 class ToolExclusionListResponse(BaseModel):

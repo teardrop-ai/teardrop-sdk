@@ -16,14 +16,16 @@ class UsageSummary(BaseModel):
 
 
 class PricingRuleWithOverrides(BaseModel):
-    """Pricing rule returned inside some admin/tool pricing responses."""
+    """Pricing rule nested in BillingPricingResponse.pricing."""
 
     id: str
     name: str
     run_price_usdc: int
-    tool_name: str
-    base_price_usdc: int
-    overrides: dict[str, int] = {}
-    updated_at: str = ""
+    tokens_in_cost_per_1k: int = 0
+    tokens_out_cost_per_1k: int = 0
+    tool_call_cost: int = 0
+    tool_overrides: dict[str, int] = {}
+    effective_from: str = ""
+    created_at: str = ""
 
     model_config = {"extra": "allow"}

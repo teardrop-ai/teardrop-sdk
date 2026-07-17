@@ -55,7 +55,7 @@ class MarketplaceToolSummary(BaseModel):
 
 class AuthorConfig(BaseModel):
     org_id: str
-    settlement_wallet: str
+    settlement_wallet: str | None = None
     created_at: str = ""
     updated_at: str = ""
 
@@ -270,7 +270,11 @@ class MarketplaceSubscription(BaseModel):
     subscribed_at: str
 
 
-MarketplaceSubscriptionItem = MarketplaceSubscription
+class MarketplaceSubscriptionItem(MarketplaceSubscription):
+    """Item in GET /marketplace/subscriptions list; org_id/is_active may be omitted."""
+
+    org_id: str | None = None
+    is_active: bool | None = None
 
 
 class MarketplaceSubscriptionResponse(MarketplaceSubscription):
@@ -280,7 +284,7 @@ class MarketplaceSubscriptionResponse(MarketplaceSubscription):
 class MarketplaceSubscriptionListResponse(BaseModel):
     """Response from GET /marketplace/subscriptions."""
 
-    subscriptions: list[MarketplaceSubscription]
+    subscriptions: list[MarketplaceSubscriptionItem]
     next_cursor: str | None = None
 
 

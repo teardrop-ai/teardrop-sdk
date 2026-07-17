@@ -26,7 +26,14 @@ WalletItem = Wallet
 
 
 class LinkWalletResponse(Wallet):
-    """Response from POST /wallets/link — alias matching OpenAPI schema."""
+    """Response from POST /wallets/link.
+
+    Spec only guarantees id/address/chain_id; is_primary/created_at may be
+    omitted, unlike the full Wallet/WalletItem listing schema.
+    """
+
+    is_primary: bool = False
+    created_at: str = ""
 
 
 class AgentWallet(BaseModel):

@@ -35,7 +35,9 @@ class A2AAgentListItem(TrustedAgent):
 
 
 class OrgA2AAgentListItem(A2AAgentListItem):
-    """Alias matching the admin list schema name."""
+    """Item returned by GET /a2a/agents (org-scoped; spec omits org_id here)."""
+
+    org_id: str = ""
 
 
 class A2AAgentDeletedResponse(BaseModel):

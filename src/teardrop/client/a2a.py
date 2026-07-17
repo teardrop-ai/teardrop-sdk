@@ -9,6 +9,7 @@ from teardrop.models import (
     A2AAgentDeletedResponse,
     A2ADelegationEvent,
     AddTrustedAgentRequest,
+    OrgA2AAgentListItem,
     OrgA2AAgentResponse,
     TrustedAgent,
 )
@@ -34,8 +35,8 @@ class _A2AMixin:
         self._raise_for_status(resp)
         data = resp.json()
         if isinstance(data, list):
-            return [TrustedAgent.model_validate(item) for item in data]
-        return [TrustedAgent.model_validate(item) for item in data.get("items", [])]
+            return [OrgA2AAgentListItem.model_validate(item) for item in data]
+        return [OrgA2AAgentListItem.model_validate(item) for item in data.get("items", [])]
 
     async def remove_trusted_agent(self, agent_id: str) -> A2AAgentDeletedResponse:
         http = await self._get_http()

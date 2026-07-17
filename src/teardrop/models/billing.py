@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from teardrop.models.usage import PricingRuleWithOverrides
+
 
 class ToolPricing(BaseModel):
     tool_name: str
@@ -18,8 +20,8 @@ class BillingPricingResponse(BaseModel):
     base_cost_usdc: int = 0
     updated_at: str = ""
     billing_enabled: bool
-    network: str = ""
-    pricing: list[dict[str, Any]] = Field(default_factory=list)
+    network: str | None = None
+    pricing: PricingRuleWithOverrides | None = None
 
 
 PricingInfo = BillingPricingResponse
