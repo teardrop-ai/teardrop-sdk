@@ -40,19 +40,38 @@ def mock_http(client):
 
 
 _BILLING_ENTRY = {
+    "id": "billing-1",
     "run_id": "run-1",
     "user_id": "user-1",
     "amount_usdc": 10000,
     "method": "credit",
     "status": "settled",
+    "tokens_in": 100,
+    "tokens_out": 50,
+    "tool_calls": 2,
+    "tool_names": ["platform/search"],
+    "duration_ms": 250,
+    "cost_usdc": 10000,
+    "platform_fee_usdc": 1000,
+    "settlement_tx": None,
+    "settlement_status": "settled",
     "created_at": "2026-01-01T00:00:00Z",
 }
 
 _INVOICE = {
+    "id": "invoice-1",
     "run_id": "run-1",
     "tokens_in": 100,
     "tokens_out": 50,
     "tool_calls": 2,
+    "tool_names": ["platform/search"],
+    "duration_ms": 250,
+    "cost_usdc": 5000,
+    "platform_fee_usdc": 500,
+    "settlement_tx": None,
+    "settlement_status": "settled",
+    "created_at": "2026-01-01T00:00:00Z",
+    "thread_id": "thread-1",
     "total_usdc": 5000,
     "breakdown": [],
     "settled_at": "2026-01-01T00:00:00Z",
@@ -197,7 +216,14 @@ class TestGetUsdcTopupRequirements:
 class TestTopupUsdc:
     async def test_returns_credited_response(self, client, mock_http):
         mock_http.post.return_value = _json_response(
-            {"credited_usdc": 1_000_000, "new_balance_usdc": 2_000_000}
+            {
+                "credited_usdc": 1_000_000,
+                "new_balance_usdc": 2_000_000,
+                "status": "settled",
+                "amount_usdc": 1_000_000,
+                "balance_usdc": 2_000_000,
+                "tx_hash": "0xtopup",
+            }
         )
         request = UsdcTopupRequest(amount_usdc=1_000_000, payment_header="x402-pay-xxx")
         result = await client.topup_usdc(request)
@@ -206,7 +232,15 @@ class TestTopupUsdc:
         assert result.new_balance_usdc == 2_000_000
 
     async def test_request_fields_in_body(self, client, mock_http):
-        mock_http.post.return_value = _json_response({"credited_usdc": 500_000})
+        mock_http.post.return_value = _json_response(
+            {
+                "credited_usdc": 500_000,
+                "status": "settled",
+                "amount_usdc": 500_000,
+                "balance_usdc": 500_000,
+                "tx_hash": "0xtopup",
+            }
+        )
         request = UsdcTopupRequest(amount_usdc=500_000, payment_header="hdr")
         await client.topup_usdc(request)
         _, kwargs = mock_http.post.call_args

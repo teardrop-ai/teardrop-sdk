@@ -44,6 +44,14 @@ def _token_response_dict() -> dict:
     }
 
 
+_VERIFY_RESPONSE = {"message": "verified", "verified": True}
+_INVITE_RESPONSE = {
+    "invite_url": "https://...",
+    "token": "invite-token",
+    "expires_at": "2026-01-02T00:00:00Z",
+}
+
+
 # ─── get_siwe_nonce ───────────────────────────────────────────────────────────
 
 
@@ -181,13 +189,13 @@ class TestLogout:
 
 class TestVerifyEmail:
     async def test_passes_token_as_query_param(self, client, mock_http):
-        mock_http.get.return_value = _json_response({"message": "verified"})
+        mock_http.get.return_value = _json_response(_VERIFY_RESPONSE)
         await client.verify_email("one-time-token")
         _, kwargs = mock_http.get.call_args
         assert kwargs["params"] == {"token": "one-time-token"}
 
     async def test_returns_verify_response(self, client, mock_http):
-        mock_http.get.return_value = _json_response({"message": "verified"})
+        mock_http.get.return_value = _json_response(_VERIFY_RESPONSE)
         result = await client.verify_email("tok")
         assert isinstance(result, VerifyEmailResponse)
         assert result.message == "verified"
@@ -215,7 +223,7 @@ class TestResendVerification:
 
 class TestInvite:
     async def test_with_email_includes_email_in_body(self, client, mock_http):
-        mock_http.post.return_value = _json_response({"invite_url": "https://..."})
+        mock_http.post.return_value = _json_response(_INVITE_RESPONSE)
         await client.invite(email="u@acme.com", role="member")
         _, kwargs = mock_http.post.call_args
         assert "email" in kwargs["json"]
@@ -223,14 +231,14 @@ class TestInvite:
         assert kwargs["json"]["role"] == "member"
 
     async def test_without_email_omits_email_from_body(self, client, mock_http):
-        mock_http.post.return_value = _json_response({"invite_url": "https://..."})
+        mock_http.post.return_value = _json_response(_INVITE_RESPONSE)
         await client.invite(role="admin")
         _, kwargs = mock_http.post.call_args
         assert "email" not in kwargs["json"]
         assert kwargs["json"]["role"] == "admin"
 
     async def test_default_role_is_member(self, client, mock_http):
-        mock_http.post.return_value = _json_response({"invite_url": "https://..."})
+        mock_http.post.return_value = _json_response(_INVITE_RESPONSE)
         await client.invite()
         _, kwargs = mock_http.post.call_args
         assert kwargs["json"]["role"] == "member"

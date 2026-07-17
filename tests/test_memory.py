@@ -43,7 +43,7 @@ _MEMORY = {"id": "m-1", "content": "Remember this", "created_at": "2026-01-01T00
 class TestListMemories:
     async def test_returns_list_of_memory_entries(self, client, mock_http):
         mock_http.get.return_value = _json_response(
-            {"items": [_MEMORY, _MEMORY], "next_cursor": None}
+            {"items": [_MEMORY, _MEMORY], "next_cursor": None, "total": 2}
         )
         result = await client.list_memories()
         assert isinstance(result, MemoryListResponse)
@@ -52,13 +52,15 @@ class TestListMemories:
         assert result.items[0].content == "Remember this"
 
     async def test_limit_param_forwarded(self, client, mock_http):
-        mock_http.get.return_value = _json_response({"items": [_MEMORY], "next_cursor": None})
+        mock_http.get.return_value = _json_response(
+            {"items": [_MEMORY], "next_cursor": None, "total": 1}
+        )
         await client.list_memories(limit=10)
         _, kwargs = mock_http.get.call_args
         assert kwargs["params"] == {"limit": 10}
 
     async def test_empty_list(self, client, mock_http):
-        mock_http.get.return_value = _json_response({"items": [], "next_cursor": None})
+        mock_http.get.return_value = _json_response({"items": [], "next_cursor": None, "total": 0})
         result = await client.list_memories()
         assert isinstance(result, MemoryListResponse)
         assert result.items == []

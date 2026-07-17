@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from teardrop.client._core import _quote_path_segment
 from teardrop.models import (
     CreateMcpServerRequest,
     DiscoverMcpToolsResponse,
@@ -38,7 +39,8 @@ class _McpMixin:
     async def get_mcp_server(self, server_id: str) -> McpServerResponse:
         http = await self._get_http()
         resp = await http.get(
-            f"{self._base_url}/mcp/servers/{server_id}", headers=await self._headers()
+            f"{self._base_url}/mcp/servers/{_quote_path_segment(server_id)}",
+            headers=await self._headers(),
         )
         self._raise_for_status(resp)
         return McpServerResponse.model_validate(resp.json())
@@ -48,7 +50,7 @@ class _McpMixin:
     ) -> McpServerResponse:
         http = await self._get_http()
         resp = await http.patch(
-            f"{self._base_url}/mcp/servers/{server_id}",
+            f"{self._base_url}/mcp/servers/{_quote_path_segment(server_id)}",
             json=request.model_dump(exclude_unset=True),
             headers=await self._headers(),
         )
@@ -58,7 +60,8 @@ class _McpMixin:
     async def delete_mcp_server(self, server_id: str) -> McpServerDeletedResponse:
         http = await self._get_http()
         resp = await http.delete(
-            f"{self._base_url}/mcp/servers/{server_id}", headers=await self._headers()
+            f"{self._base_url}/mcp/servers/{_quote_path_segment(server_id)}",
+            headers=await self._headers(),
         )
         self._raise_for_status(resp)
         return McpServerDeletedResponse.model_validate(resp.json())
@@ -66,7 +69,7 @@ class _McpMixin:
     async def discover_mcp_server_tools(self, server_id: str) -> DiscoverMcpToolsResponse:
         http = await self._get_http()
         resp = await http.post(
-            f"{self._base_url}/mcp/servers/{server_id}/discover",
+            f"{self._base_url}/mcp/servers/{_quote_path_segment(server_id)}/discover",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -84,7 +87,7 @@ class _McpMixin:
         else:
             body = {"tool_name": request_or_tool_name, "args": arguments or {}}
         resp = await http.post(
-            f"{self._base_url}/mcp/servers/{server_id}/test-tool",
+            f"{self._base_url}/mcp/servers/{_quote_path_segment(server_id)}/test-tool",
             json=body,
             headers=await self._headers(),
         )

@@ -283,7 +283,9 @@ class TestDeleteMcpServer:
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
         mock_http.delete = AsyncMock(
-            return_value=_json_response({"id": "srv-1", "deleted_at": "2026-01-01T00:00:00Z"})
+            return_value=_json_response(
+                {"id": "srv-1", "status": "deleted", "deleted_at": "2026-01-01T00:00:00Z"}
+            )
         )
         result = await client.delete_mcp_server("srv-1")
         assert isinstance(result, McpServerDeletedResponse)
@@ -304,7 +306,9 @@ class TestDeleteMcpServer:
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
         mock_http.delete = AsyncMock(
-            return_value=_json_response({"id": "srv-1", "deleted_at": "2026-01-01T00:00:00Z"})
+            return_value=_json_response(
+                {"id": "srv-1", "status": "deleted", "deleted_at": "2026-01-01T00:00:00Z"}
+            )
         )
         await client.delete_mcp_server("srv-1")
         url_called = mock_http.delete.call_args.args[0]

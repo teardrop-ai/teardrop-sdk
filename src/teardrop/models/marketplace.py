@@ -20,7 +20,7 @@ class MarketplaceTool(BaseModel):
 class MarketplaceCatalogResponse(BaseModel):
     """Response from GET /marketplace/catalog."""
 
-    tools: list[MarketplaceTool] = Field(default_factory=list)
+    tools: list[MarketplaceTool]
     next_cursor: str | None = None
 
 
@@ -91,11 +91,18 @@ class EarningsEntry(BaseModel):
 class MarketplaceEarningEntry(EarningsEntry):
     """Alias matching the OpenAPI schema item name."""
 
+    author_share_usdc: int
+    caller_org_id: str
+    total_cost_usdc: int
+    platform_share_usdc: int
+    status: str
+    created_at: str
+
 
 class MarketplaceEarningsResponse(BaseModel):
     """Response from GET /marketplace/earnings."""
 
-    earnings: list[EarningsEntry] = Field(default_factory=list)
+    earnings: list[MarketplaceEarningEntry]
     next_cursor: str | None = None
 
 
@@ -103,6 +110,12 @@ class MarketplaceEarningsByToolEntry(BaseModel):
     """Per-tool earnings aggregate."""
 
     tool_name: str
+    total_calls: int
+    total_amount_usdc: int
+    total_author_share_usdc: int
+    pending_author_share_usdc: int
+    settled_author_share_usdc: int
+    total_platform_share_usdc: int
     total_cost_usdc: int = 0
     author_share_usdc: int = 0
     platform_share_usdc: int = 0
@@ -114,13 +127,14 @@ class MarketplaceEarningsByToolEntry(BaseModel):
 class MarketplaceEarningsByToolResponse(BaseModel):
     """Response from GET /marketplace/earnings/by-tool."""
 
-    tools: list[MarketplaceEarningsByToolEntry] = Field(default_factory=list)
+    tools: list[MarketplaceEarningsByToolEntry]
     next_cursor: str | None = None
 
 
 class MarketplaceBalanceResponse(BaseModel):
     """Response from GET /marketplace/balance."""
 
+    org_id: str
     balance_usdc: int
     pending_usdc: int = 0
     lifetime_earnings_usdc: int = 0
@@ -136,10 +150,12 @@ class MarketplaceWithdrawalResponse(BaseModel):
     """Response from POST /marketplace/withdraw."""
 
     id: str
+    org_id: str
     amount_usdc: int
+    wallet: str
     tx_hash: str | None = None
-    status: str = ""
-    created_at: str = ""
+    status: str
+    created_at: str
 
     model_config = {"extra": "allow"}
 
@@ -149,9 +165,10 @@ class MarketplaceWithdrawalHistoryItem(BaseModel):
 
     id: str
     amount_usdc: int
+    wallet: str
     status: str
     tx_hash: str | None = None
-    created_at: str = ""
+    created_at: str
 
     model_config = {"extra": "allow"}
 
@@ -159,7 +176,7 @@ class MarketplaceWithdrawalHistoryItem(BaseModel):
 class MarketplaceWithdrawalsListResponse(BaseModel):
     """Response from GET /marketplace/withdrawals."""
 
-    withdrawals: list[MarketplaceWithdrawalHistoryItem] = Field(default_factory=list)
+    withdrawals: list[MarketplaceWithdrawalHistoryItem]
     next_cursor: str | None = None
 
 
@@ -249,8 +266,8 @@ class MarketplaceSubscription(BaseModel):
     id: str
     org_id: str
     qualified_tool_name: str
-    is_active: bool = True
-    subscribed_at: str = ""
+    is_active: bool
+    subscribed_at: str
 
 
 MarketplaceSubscriptionItem = MarketplaceSubscription
@@ -263,7 +280,7 @@ class MarketplaceSubscriptionResponse(MarketplaceSubscription):
 class MarketplaceSubscriptionListResponse(BaseModel):
     """Response from GET /marketplace/subscriptions."""
 
-    subscriptions: list[MarketplaceSubscription] = Field(default_factory=list)
+    subscriptions: list[MarketplaceSubscription]
     next_cursor: str | None = None
 
 
@@ -366,8 +383,8 @@ class MarketplaceImportPreviewResponse(BaseModel):
     server_id: str
     slots_remaining: int
     can_publish: bool
-    tools: list[MarketplaceImportPreviewTool] = Field(default_factory=list)
-    errors: list[MarketplaceImportPreviewError] = Field(default_factory=list)
+    tools: list[MarketplaceImportPreviewTool]
+    errors: list[MarketplaceImportPreviewError]
 
 
 class MarketplaceImportPublishedTool(BaseModel):
@@ -404,7 +421,7 @@ class MarketplaceImportPublishResponse(BaseModel):
     """Response from POST /marketplace/import/publish."""
 
     server_id: str
-    created: list[MarketplaceImportPublishCreatedItem] = Field(default_factory=list)
-    errors: list[MarketplaceImportPublishError] = Field(default_factory=list)
+    created: list[MarketplaceImportPublishCreatedItem]
+    errors: list[MarketplaceImportPublishError]
 
     model_config = {"extra": "allow"}

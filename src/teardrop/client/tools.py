@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from teardrop.client._core import _quote_path_segment
 from teardrop.models import (
     CreateOrgToolRequest,
     OrgToolResponse,
@@ -36,14 +37,17 @@ class _ToolsMixin:
 
     async def get_tool(self, tool_id: str) -> OrgToolResponse:
         http = await self._get_http()
-        resp = await http.get(f"{self._base_url}/tools/{tool_id}", headers=await self._headers())
+        resp = await http.get(
+            f"{self._base_url}/tools/{_quote_path_segment(tool_id)}",
+            headers=await self._headers(),
+        )
         self._raise_for_status(resp)
         return OrgToolResponse.model_validate(resp.json())
 
     async def update_tool(self, tool_id: str, request: UpdateOrgToolRequest) -> OrgToolResponse:
         http = await self._get_http()
         resp = await http.patch(
-            f"{self._base_url}/tools/{tool_id}",
+            f"{self._base_url}/tools/{_quote_path_segment(tool_id)}",
             json=request.model_dump(exclude_unset=True),
             headers=await self._headers(),
         )
@@ -52,7 +56,10 @@ class _ToolsMixin:
 
     async def delete_tool(self, tool_id: str) -> ToolDeletedResponse:
         http = await self._get_http()
-        resp = await http.delete(f"{self._base_url}/tools/{tool_id}", headers=await self._headers())
+        resp = await http.delete(
+            f"{self._base_url}/tools/{_quote_path_segment(tool_id)}",
+            headers=await self._headers(),
+        )
         self._raise_for_status(resp)
         return ToolDeletedResponse.model_validate(resp.json())
 

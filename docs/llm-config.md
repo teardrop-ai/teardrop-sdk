@@ -39,6 +39,20 @@ config = await client.set_llm_config(
 - `routing_preference="cost"` enables smart routing to find the cheapest model in a pool.
 - Cache is invalidated on successful update.
 
+To remove a stored BYOK key while keeping the provider and model configuration,
+use `clear_llm_api_key()`:
+
+```python
+config = await client.clear_llm_api_key(
+    provider="anthropic",
+    model="claude-sonnet-4-20250514",
+)
+```
+
+The synchronous client exposes the same method. Concurrent reads of the cached
+configuration and public model benchmarks are coalesced into one request per
+resource when the cache is cold.
+
 ## Delete LLM Config
 
 ```python

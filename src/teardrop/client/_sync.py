@@ -8,6 +8,8 @@ from teardrop.client._async import AsyncTeardropClient
 from teardrop.client.event_triggers import _SyncEventTriggersModule
 from teardrop.client.schedules import _SyncSchedulesModule
 from teardrop.models import (
+    A2AAgentDeletedResponse,
+    A2ADelegationEvent,
     AddTrustedAgentRequest,
     AgentCard,
     AgentDecisionListResponse,
@@ -16,8 +18,8 @@ from teardrop.models import (
     AgentWalletDeactivatedResponse,
     AgentWalletResponse,
     AuthMeResponse,
-    BillingBalance,
-    BillingHistoryEntry,
+    BillingBalanceResponse,
+    BillingHistoryItem,
     BillingPricingResponse,
     CreateInviteResponse,
     CreateMcpServerRequest,
@@ -25,7 +27,7 @@ from teardrop.models import (
     CreditHistoryResponse,
     DiscoverMcpToolsResponse,
     EventDispatchResponse,
-    Invoice,
+    InvoiceItem,
     InvoiceListResponse,
     LinkWalletRequest,
     LinkWalletResponse,
@@ -54,14 +56,18 @@ from teardrop.models import (
     OrgCredentialItem,
     OrgToolResponse,
     RegenerateCredentialsResponse,
+    ResendVerificationResponse,
     RunFeedbackResponse,
     RunOutcomeRequest,
     RunOutcomeResponse,
+    SiweNonceResponse,
     SSEEvent,
     StoreMemoryRequest,
     StripeSessionStatusResponse,
     StripeTopupRequest,
     StripeTopupResponse,
+    TestMcpToolRequest,
+    TestMcpToolResponse,
     TestWebhookResponse,
     TokenResponse,
     ToolDeletedResponse,
@@ -77,7 +83,9 @@ from teardrop.models import (
     UpdateOrgToolRequest,
     UsageSummary,
     UsdcTopupRequest,
-    UsdcTopupRequirements,
+    UsdcTopupRequirementsResponse,
+    UsdcTopupResponse,
+    VerifyEmailResponse,
     Wallet,
     WalletDeletedResponse,
     WithdrawRequest,
@@ -151,7 +159,7 @@ class TeardropClient:
     def delete_tool_exclusion(self, tool_name: str) -> None:
         return self._run(self._async.delete_tool_exclusion(tool_name))
 
-    def get_siwe_nonce(self) -> dict[str, str]:
+    def get_siwe_nonce(self) -> SiweNonceResponse:
         return self._run(self._async.get_siwe_nonce())
 
     def authenticate_siwe(self, message: str, signature: str) -> str:
@@ -172,10 +180,10 @@ class TeardropClient:
     def logout(self, refresh_token: str) -> None:
         return self._run(self._async.logout(refresh_token))
 
-    def verify_email(self, token: str) -> dict[str, Any]:
+    def verify_email(self, token: str) -> VerifyEmailResponse:
         return self._run(self._async.verify_email(token))
 
-    def resend_verification(self, email: str) -> dict[str, Any]:
+    def resend_verification(self, email: str) -> ResendVerificationResponse:
         return self._run(self._async.resend_verification(email))
 
     def invite(self, **kwargs: Any) -> CreateInviteResponse:
@@ -187,19 +195,19 @@ class TeardropClient:
     def regenerate_org_credentials(self) -> RegenerateCredentialsResponse:
         return self._run(self._async.regenerate_org_credentials())
 
-    def get_balance(self) -> BillingBalance:
+    def get_balance(self) -> BillingBalanceResponse:
         return self._run(self._async.get_balance())
 
     def get_pricing(self) -> BillingPricingResponse:
         return self._run(self._async.get_pricing())
 
-    def get_billing_history(self, *, limit: int = 20) -> list[BillingHistoryEntry]:
+    def get_billing_history(self, *, limit: int = 20) -> list[BillingHistoryItem]:
         return self._run(self._async.get_billing_history(limit=limit))
 
     def get_invoices(self, *, limit: int = 20) -> InvoiceListResponse:
         return self._run(self._async.get_invoices(limit=limit))
 
-    def get_invoice(self, run_id: str) -> Invoice:
+    def get_invoice(self, run_id: str) -> InvoiceItem:
         return self._run(self._async.get_invoice(run_id))
 
     def get_credit_history(
@@ -213,10 +221,10 @@ class TeardropClient:
     def get_stripe_topup_status(self, session_id: str) -> StripeSessionStatusResponse:
         return self._run(self._async.get_stripe_topup_status(session_id))
 
-    def get_usdc_topup_requirements(self, amount_usdc: int) -> UsdcTopupRequirements:
+    def get_usdc_topup_requirements(self, amount_usdc: int) -> UsdcTopupRequirementsResponse:
         return self._run(self._async.get_usdc_topup_requirements(amount_usdc))
 
-    def topup_usdc(self, request: UsdcTopupRequest) -> dict[str, Any]:
+    def topup_usdc(self, request: UsdcTopupRequest) -> UsdcTopupResponse:
         return self._run(self._async.topup_usdc(request))
 
     def get_usage(self, **kwargs: Any) -> UsageSummary:
@@ -249,8 +257,8 @@ class TeardropClient:
     def delete_wallet(self, wallet_id: str) -> WalletDeletedResponse:
         return self._run(self._async.delete_wallet(wallet_id))
 
-    def get_agent_card(self) -> AgentCard:
-        return self._run(self._async.get_agent_card())
+    def get_agent_card(self, *, force_refresh: bool = False) -> AgentCard:
+        return self._run(self._async.get_agent_card(force_refresh=force_refresh))
 
     def create_tool(self, request: CreateOrgToolRequest) -> OrgToolResponse:
         return self._run(self._async.create_tool(request))
@@ -291,8 +299,11 @@ class TeardropClient:
         return self._run(self._async.discover_mcp_server_tools(server_id))
 
     def test_mcp_tool(
-        self, server_id: str, tool_name: str, arguments: dict[str, Any]
-    ) -> dict[str, Any]:
+        self,
+        server_id: str,
+        tool_name: TestMcpToolRequest | str,
+        arguments: dict[str, Any] | None = None,
+    ) -> TestMcpToolResponse:
         return self._run(self._async.test_mcp_tool(server_id, tool_name, arguments))
 
     def list_memories(self, *, limit: int = 50) -> MemoryListResponse:
@@ -406,11 +417,34 @@ class TeardropClient:
     def list_trusted_agents(self) -> list[TrustedAgent]:
         return self._run(self._async.list_trusted_agents())
 
-    def remove_trusted_agent(self, agent_id: str) -> dict[str, Any]:
+    def remove_trusted_agent(self, agent_id: str) -> A2AAgentDeletedResponse:
         return self._run(self._async.remove_trusted_agent(agent_id))
 
-    def get_delegations(self, **kwargs: Any) -> list[dict[str, Any]]:
+    def get_delegations(self, **kwargs: Any) -> list[A2ADelegationEvent]:
         return self._run(self._async.get_delegations(**kwargs))
+
+    def clear_llm_api_key(
+        self,
+        *,
+        provider: str,
+        model: str,
+        routing_preference: str = "default",
+        api_base: str | None = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.0,
+        timeout_seconds: int = 120,
+    ) -> LlmConfigResponse:
+        return self._run(
+            self._async.clear_llm_api_key(
+                provider=provider,
+                model=model,
+                routing_preference=routing_preference,
+                api_base=api_base,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                timeout_seconds=timeout_seconds,
+            )
+        )
 
     def provision_agent_wallet(self) -> AgentWalletResponse:
         return self._run(self._async.provision_agent_wallet())

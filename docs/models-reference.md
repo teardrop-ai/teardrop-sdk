@@ -8,13 +8,13 @@ Use this table to find which model backs which client method.
 | `JwtPayloadBase`, `TokenResponse` | `get_me()`, `register()`, `refresh()` |
 | `AgentRunRequest` | `run()` (internal) |
 | `SSEEvent` | `run()` yields |
-| `CreditBalance` / `BillingBalance` | `get_balance()` |
+| `CreditBalance`, `BillingBalance`, `BillingBalanceResponse` | `get_balance()` |
 | `BillingPricingResponse`, `ToolPricing` | `get_pricing()` |
-| `BillingHistoryEntry` | `get_billing_history()` |
-| `Invoice` | `get_invoices()`, `get_invoice()` |
+| `BillingHistoryEntry`, `BillingHistoryItem` | `get_billing_history()` |
+| `Invoice`, `InvoiceItem`, `InvoiceListResponse` | `get_invoices()`, `get_invoice()` |
 | `CreditHistoryEntry` | `get_credit_history()` |
 | `StripeTopupRequest`, `StripeTopupResponse`, `StripeTopupStatusResponse` | `topup_stripe()`, `get_stripe_topup_status()` |
-| `UsdcTopupRequirements`, `UsdcTopupRequest` | `get_usdc_topup_requirements()`, `topup_usdc()` |
+| `UsdcTopupRequirements`, `UsdcTopupRequirementsResponse`, `UsdcTopupRequest`, `UsdcTopupResponse` | `get_usdc_topup_requirements()`, `topup_usdc()` |
 | `UsageSummary` | `get_usage()` |
 | `OrgLlmConfig`, `SetLlmConfigRequest`, `ProviderType`, `RoutingPreference` | LLM config CRUD |
 | `CreateScheduleRequest`, `ScheduledRun`, `ScheduledRunResult`, `ScheduledRunsPage`, `UpdateScheduleRequest` | `client.schedules.*` |
@@ -25,9 +25,11 @@ Use this table to find which model backs which client method.
 | `OrgTool`, `CreateOrgToolRequest`, `UpdateOrgToolRequest` | tool CRUD |
 | `OrgMcpServer`, `CreateMcpServerRequest`, `UpdateMcpServerRequest`, `DiscoverMcpToolsResponse`, `McpToolDefinition` | MCP CRUD |
 | `MemoryEntry`, `StoreMemoryRequest` | memory CRUD |
-| `MarketplaceTool`, `MarketplaceSubscription`, `AuthorConfig`, `EarningsEntry`, `WithdrawRequest` | marketplace |
+| `MarketplaceTool`, `MarketplaceSubscription`, `AuthorConfig`, `EarningsEntry`, `MarketplaceEarningEntry`, `MarketplaceEarningsByToolEntry`, `WithdrawRequest` | marketplace |
+| `MarketplaceImportPreviewResponse`, `MarketplaceImportPublishResponse`, `ImportPreviewSchemaStatus`, `ImportPreviewDroppedFeatures` | marketplace import |
 | `AddTrustedAgentRequest`, `TrustedAgent` | A2A delegation |
-| `AgentWallet` | agent wallets |
+| `A2ADelegationEvent`, `A2AAgentDeletedResponse` | delegation history and trusted-agent removal |
+| `AgentWallet`, `AgentWalletResponse`, `AgentWalletDeactivatedResponse`, `WalletDeletedResponse` | agent wallets |
 | `AdminCreateA2AAgentRequest`, `AdminCreateClientCredentialsRequest`, `AdminCreateOrgRequest`, `AdminCreateUserRequest`, `AdminTopupRequest`, `CompleteWithdrawalRequest`, `SpendingConfigUpdate`, `ToolPricingOverrideRequest` | `admin.*` client methods |
 | `AdminMemoryItem`, `AdminMemoryListResponse`, `AdminMemoryPurgeResponse`, `AdminWithdrawalItem`, `AdminWithdrawalListResponse`, `SweepStatusItem`, `SweepStatusResponse` | admin responses |
 | `AdminTopupResponse`, `PendingSettlementItem`, `PendingSettlementsResponse`, `RevenueSummaryResponse`, `SettlementBalanceResponse`, `SettlementRetryResponse` | admin billing responses |
@@ -46,6 +48,11 @@ from teardrop import (
 	BillingBalance,
 )
 ```
+
+Every symbol exported by `teardrop.models` is also available from the top-level
+`teardrop` package. This includes response models such as
+`MemoryDeletedResponse`, `AdminMemoryPurgeResponse`, `UsdcTopupResponse`, and
+`LlmConfigResponse`.
 
 ---
 

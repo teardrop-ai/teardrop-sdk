@@ -225,7 +225,14 @@ class TestRun:
 class TestGetBalance:
     @pytest.mark.asyncio
     async def test_returns_billing_balance(self):
-        balance_data = {"org_id": "org-1", "balance_usdc": 50000}
+        balance_data = {
+            "org_id": "org-1",
+            "balance_usdc": 50000,
+            "spending_limit_usdc": 100000,
+            "spending_limit_active": True,
+            "is_paused": False,
+            "daily_spend_usdc": 0,
+        }
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(balance_data))
@@ -241,7 +248,12 @@ class TestGetBalance:
 class TestGetPricing:
     @pytest.mark.asyncio
     async def test_returns_pricing_info(self):
-        pricing_data = {"tools": [], "base_cost_usdc": 1000, "updated_at": "2026-01-01T00:00:00Z"}
+        pricing_data = {
+            "tools": [],
+            "base_cost_usdc": 1000,
+            "updated_at": "2026-01-01T00:00:00Z",
+            "billing_enabled": True,
+        }
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(pricing_data))
@@ -332,6 +344,7 @@ class TestGetMe:
 
         me_data = {
             "sub": "user-1",
+            "user_id": "user-1",
             "org_id": "org-1",
             "role": "member",
             "auth_method": "email",
@@ -356,10 +369,19 @@ class TestGetInvoices:
     @pytest.mark.asyncio
     async def test_validates_items(self):
         invoice_item = {
+            "id": "invoice-1",
             "run_id": "run-1",
             "tokens_in": 10,
             "tokens_out": 20,
             "tool_calls": 1,
+            "tool_names": ["platform/search"],
+            "duration_ms": 100,
+            "cost_usdc": 500,
+            "platform_fee_usdc": 50,
+            "settlement_tx": None,
+            "settlement_status": "settled",
+            "created_at": "2026-01-01T00:00:00Z",
+            "thread_id": "thread-1",
             "total_usdc": 500,
             "breakdown": [],
             "settled_at": "2026-01-01T00:00:00Z",
@@ -385,6 +407,7 @@ class TestGetCreditHistory:
     async def test_validates_items(self):
         entry = {
             "id": "ch-1",
+            "org_id": "org-1",
             "amount_usdc": 1000,
             "operation": "topup",
             "balance_usdc_after": 500_000,
@@ -592,8 +615,22 @@ class TestGetAgentTools:
                         "name": "platform/web_search",
                         "source": "platform",
                         "access_mode": "included",
+                        "qualified_name": "platform/web_search",
+                        "display_name": "Web Search",
+                        "description": "Search the web",
+                        "cost_usdc": 0,
+                        "input_schema": {},
                     },
-                    {"name": "acme/my_tool", "source": "marketplace", "access_mode": "subscribed"},
+                    {
+                        "name": "acme/my_tool",
+                        "source": "marketplace",
+                        "access_mode": "subscribed",
+                        "qualified_name": "acme/my_tool",
+                        "display_name": "My Tool",
+                        "description": "A marketplace tool",
+                        "cost_usdc": 10,
+                        "input_schema": {},
+                    },
                 ]
             }
         )
@@ -760,6 +797,14 @@ class TestOrgCredentials:
 class TestRunWithToolPolicy:
     """Tests that tool_policy is serialized into the agent run request."""
 
+    def test_tool_policy_rejects_more_than_50_names(self):
+        from pydantic import ValidationError as PydanticValidationError
+
+        from teardrop.models import ToolPolicy
+
+        with pytest.raises(PydanticValidationError):
+            ToolPolicy(exclude_names=[f"tool-{index}" for index in range(51)])
+
     @pytest.mark.asyncio
     async def test_tool_policy_included_in_body(self, client, mock_http):
         from teardrop.models import ToolPolicy
@@ -852,7 +897,20 @@ class TestParseListResponse:
     def test_envelope_tools(self):
         from teardrop.models import AgentTool
 
-        data = {"tools": [{"name": "t1", "source": "platform", "access_mode": "included"}]}
+        data = {
+            "tools": [
+                {
+                    "name": "t1",
+                    "source": "platform",
+                    "access_mode": "included",
+                    "qualified_name": "platform/t1",
+                    "display_name": "Tool 1",
+                    "description": "A tool",
+                    "cost_usdc": 0,
+                    "input_schema": {},
+                }
+            ]
+        }
         result = _parse_list_response(data, AgentTool, item_container="tools")
         assert len(result) == 1
         assert result[0].name == "t1"
@@ -872,7 +930,20 @@ class TestParseListResponse:
     def test_envelope_auto_keys(self):
         from teardrop.models import AgentTool
 
-        data = {"tools": [{"name": "t1", "source": "platform", "access_mode": "included"}]}
+        data = {
+            "tools": [
+                {
+                    "name": "t1",
+                    "source": "platform",
+                    "access_mode": "included",
+                    "qualified_name": "platform/t1",
+                    "display_name": "Tool 1",
+                    "description": "A tool",
+                    "cost_usdc": 0,
+                    "input_schema": {},
+                }
+            ]
+        }
         result = _parse_list_response(data, AgentTool)
         assert len(result) == 1
         assert result[0].name == "t1"

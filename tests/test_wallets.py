@@ -49,6 +49,8 @@ _AGENT_WALLET = {
     "id": "aw-1",
     "org_id": "org-1",
     "address": "0xDEAD",
+    "chain_id": 84532,
+    "wallet_type": "agent",
     "network": "base-sepolia",
     "is_active": True,
     "created_at": "2026-01-01T00:00:00Z",
@@ -87,7 +89,7 @@ class TestLinkWallet:
 class TestDeleteWallet:
     async def test_returns_deleted_response(self, client, mock_http):
         mock_http.delete.return_value = _json_response(
-            {"id": "w-1", "deleted_at": "2026-01-01T00:00:00Z"}
+            {"id": "w-1", "status": "deleted", "deleted_at": "2026-01-01T00:00:00Z"}
         )
         result = await client.delete_wallet("w-1")
         assert isinstance(result, WalletDeletedResponse)
@@ -95,7 +97,7 @@ class TestDeleteWallet:
 
     async def test_correct_url(self, client, mock_http):
         mock_http.delete.return_value = _json_response(
-            {"id": "w-abc", "deleted_at": "2026-01-01T00:00:00Z"}
+            {"id": "w-abc", "status": "deleted", "deleted_at": "2026-01-01T00:00:00Z"}
         )
         await client.delete_wallet("w-abc")
         args, _ = mock_http.delete.call_args
@@ -160,7 +162,11 @@ class TestGetAgentWallet:
 class TestDeactivateAgentWallet:
     async def test_returns_deactivated_response(self, client, mock_http):
         mock_http.delete.return_value = _json_response(
-            {"id": "aw-1", "deactivated_at": "2026-01-01T00:00:00Z"}
+            {
+                "id": "aw-1",
+                "status": "deactivated",
+                "deactivated_at": "2026-01-01T00:00:00Z",
+            }
         )
         result = await client.deactivate_agent_wallet()
         assert isinstance(result, AgentWalletDeactivatedResponse)
@@ -168,7 +174,11 @@ class TestDeactivateAgentWallet:
 
     async def test_correct_url(self, client, mock_http):
         mock_http.delete.return_value = _json_response(
-            {"id": "aw-1", "deactivated_at": "2026-01-01T00:00:00Z"}
+            {
+                "id": "aw-1",
+                "status": "deactivated",
+                "deactivated_at": "2026-01-01T00:00:00Z",
+            }
         )
         await client.deactivate_agent_wallet()
         args, _ = mock_http.delete.call_args

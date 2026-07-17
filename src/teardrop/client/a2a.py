@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from teardrop.client._core import _quote_path_segment
 from teardrop.models import (
     A2AAgentDeletedResponse,
     A2ADelegationEvent,
@@ -39,7 +40,7 @@ class _A2AMixin:
     async def remove_trusted_agent(self, agent_id: str) -> A2AAgentDeletedResponse:
         http = await self._get_http()
         resp = await http.delete(
-            f"{self._base_url}/a2a/agents/{agent_id}",
+            f"{self._base_url}/a2a/agents/{_quote_path_segment(agent_id)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)

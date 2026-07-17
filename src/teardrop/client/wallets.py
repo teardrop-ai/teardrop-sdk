@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from teardrop.client._core import _quote_path_segment
 from teardrop.models import (
     AgentWalletDeactivatedResponse,
     AgentWalletResponse,
@@ -37,7 +38,8 @@ class _WalletsMixin:
     async def delete_wallet(self, wallet_id: str) -> WalletDeletedResponse:
         http = await self._get_http()
         resp = await http.delete(
-            f"{self._base_url}/wallets/{wallet_id}", headers=await self._headers()
+            f"{self._base_url}/wallets/{_quote_path_segment(wallet_id)}",
+            headers=await self._headers(),
         )
         self._raise_for_status(resp)
         return WalletDeletedResponse.model_validate(resp.json())

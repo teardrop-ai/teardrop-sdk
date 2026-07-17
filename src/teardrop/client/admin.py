@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from teardrop.client._core import _quote_path_segment
 from teardrop.models import (
     A2AAgentDeletedResponse,
     A2AAgentListItem,
@@ -61,7 +62,7 @@ class _AdminMixin:
     async def admin_delete_a2a_agent(self, agent_id: str) -> A2AAgentDeletedResponse:
         http = await self._get_http()
         resp = await http.delete(
-            f"{self._base_url}/admin/a2a/agents/{agent_id}",
+            f"{self._base_url}/admin/a2a/agents/{_quote_path_segment(agent_id)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -70,7 +71,7 @@ class _AdminMixin:
     async def admin_list_a2a_agents(self, org_id: str) -> list[A2AAgentListItem]:
         http = await self._get_http()
         resp = await http.get(
-            f"{self._base_url}/admin/a2a/agents/{org_id}",
+            f"{self._base_url}/admin/a2a/agents/{_quote_path_segment(org_id)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -100,7 +101,7 @@ class _AdminMixin:
     async def admin_retry_settlement(self, settlement_id: str) -> SettlementRetryResponse:
         http = await self._get_http()
         resp = await http.post(
-            f"{self._base_url}/admin/billing/pending/{settlement_id}/retry",
+            f"{self._base_url}/admin/billing/pending/{_quote_path_segment(settlement_id)}/retry",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -177,7 +178,7 @@ class _AdminMixin:
     ) -> CompleteWithdrawalResponse:
         http = await self._get_http()
         resp = await http.post(
-            f"{self._base_url}/admin/marketplace/complete-withdrawal/{withdrawal_id}",
+            f"{self._base_url}/admin/marketplace/complete-withdrawal/{_quote_path_segment(withdrawal_id)}",
             json=request.model_dump(),
             headers=await self._headers(),
         )
@@ -187,7 +188,7 @@ class _AdminMixin:
     async def admin_process_withdrawal(self, withdrawal_id: str) -> AdminWithdrawalActionResponse:
         http = await self._get_http()
         resp = await http.post(
-            f"{self._base_url}/admin/marketplace/process-withdrawal/{withdrawal_id}",
+            f"{self._base_url}/admin/marketplace/process-withdrawal/{_quote_path_segment(withdrawal_id)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -196,7 +197,7 @@ class _AdminMixin:
     async def admin_reset_withdrawal(self, withdrawal_id: str) -> WithdrawalResetResponse:
         http = await self._get_http()
         resp = await http.post(
-            f"{self._base_url}/admin/marketplace/reset-withdrawal/{withdrawal_id}",
+            f"{self._base_url}/admin/marketplace/reset-withdrawal/{_quote_path_segment(withdrawal_id)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -223,7 +224,7 @@ class _AdminMixin:
     async def admin_sweep_retry_withdrawal(self, withdrawal_id: str) -> WithdrawalResetResponse:
         http = await self._get_http()
         resp = await http.post(
-            f"{self._base_url}/admin/marketplace/sweep-retry/{withdrawal_id}",
+            f"{self._base_url}/admin/marketplace/sweep-retry/{_quote_path_segment(withdrawal_id)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -258,7 +259,7 @@ class _AdminMixin:
     async def admin_list_mcp_servers(self, org_id: str) -> list[McpServerResponse]:
         http = await self._get_http()
         resp = await http.get(
-            f"{self._base_url}/admin/mcp/servers/{org_id}",
+            f"{self._base_url}/admin/mcp/servers/{_quote_path_segment(org_id)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -272,7 +273,7 @@ class _AdminMixin:
     ) -> AdminMemoryListResponse:
         http = await self._get_http()
         resp = await http.get(
-            f"{self._base_url}/admin/memories/org/{org_id}",
+            f"{self._base_url}/admin/memories/org/{_quote_path_segment(org_id)}",
             headers=await self._headers(),
             params={"limit": limit},
         )
@@ -282,7 +283,7 @@ class _AdminMixin:
     async def admin_purge_org_memories(self, org_id: str) -> AdminMemoryPurgeResponse:
         http = await self._get_http()
         resp = await http.delete(
-            f"{self._base_url}/admin/memories/org/{org_id}",
+            f"{self._base_url}/admin/memories/org/{_quote_path_segment(org_id)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -293,7 +294,7 @@ class _AdminMixin:
     async def admin_get_spending_config(self, org_id: str) -> OrgSpendingConfigResponse:
         http = await self._get_http()
         resp = await http.get(
-            f"{self._base_url}/admin/orgs/{org_id}/spending",
+            f"{self._base_url}/admin/orgs/{_quote_path_segment(org_id)}/spending",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -304,7 +305,7 @@ class _AdminMixin:
     ) -> OrgSpendingConfigResponse:
         http = await self._get_http()
         resp = await http.patch(
-            f"{self._base_url}/admin/orgs/{org_id}/spending",
+            f"{self._base_url}/admin/orgs/{_quote_path_segment(org_id)}/spending",
             json=request.model_dump(exclude_none=True),
             headers=await self._headers(),
         )
@@ -328,7 +329,7 @@ class _AdminMixin:
     async def admin_delete_tool_pricing(self, tool_name: str) -> ToolPricingDeleteResponse:
         http = await self._get_http()
         resp = await http.delete(
-            f"{self._base_url}/admin/pricing/tools/{tool_name}",
+            f"{self._base_url}/admin/pricing/tools/{_quote_path_segment(tool_name)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -339,7 +340,7 @@ class _AdminMixin:
     async def admin_list_tools(self, org_id: str) -> list[OrgTool]:
         http = await self._get_http()
         resp = await http.get(
-            f"{self._base_url}/admin/tools/{org_id}",
+            f"{self._base_url}/admin/tools/{_quote_path_segment(org_id)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -362,7 +363,7 @@ class _AdminMixin:
         if end is not None:
             params["end"] = end
         resp = await http.get(
-            f"{self._base_url}/admin/usage/org/{org_id}",
+            f"{self._base_url}/admin/usage/org/{_quote_path_segment(org_id)}",
             headers=await self._headers(),
             params=params or None,
         )
@@ -383,7 +384,7 @@ class _AdminMixin:
         if end is not None:
             params["end"] = end
         resp = await http.get(
-            f"{self._base_url}/admin/usage/{user_id}",
+            f"{self._base_url}/admin/usage/{_quote_path_segment(user_id)}",
             headers=await self._headers(),
             params=params or None,
         )

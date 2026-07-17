@@ -16,8 +16,8 @@ class Wallet(BaseModel):
     user_id: str | None = None
     address: str
     chain_id: int
-    is_primary: bool = False
-    created_at: str = ""
+    is_primary: bool
+    created_at: str
 
     model_config = {"extra": "allow"}
 
@@ -35,20 +35,33 @@ class AgentWallet(BaseModel):
     id: str = ""
     org_id: str = ""
     address: str = ""
+    chain_id: int = 0
+    wallet_type: str = ""
     network: str = ""
     is_active: bool = True
+    balance_usdc: int | None = None
+    balance_error: str | None = None
     created_at: str = ""
 
     model_config = {"extra": "allow"}
 
 
-AgentWalletResponse = AgentWallet
+class AgentWalletResponse(AgentWallet):
+    """Strict response shape for the agent wallet endpoints."""
+
+    id: str
+    address: str
+    chain_id: int
+    wallet_type: str
+    is_active: bool
+    created_at: str
 
 
 class AgentWalletDeactivatedResponse(BaseModel):
     """Response from DELETE /wallets/agent."""
 
-    id: str
+    id: str = ""
+    status: str
     deactivated_at: str = ""
 
     model_config = {"extra": "allow"}
@@ -57,7 +70,8 @@ class AgentWalletDeactivatedResponse(BaseModel):
 class WalletDeletedResponse(BaseModel):
     """Response from DELETE /wallets/{wallet_id}."""
 
-    id: str
+    id: str = ""
+    status: str
     deleted_at: str = ""
 
     model_config = {"extra": "allow"}

@@ -11,6 +11,10 @@ card = await client.get_agent_card()
 card = await client.get_agent_card(force_refresh=True)
 ```
 
+The synchronous client accepts the same `force_refresh` keyword. A forced fetch
+replaces the cached card after a successful response; ordinary calls reuse the
+five-minute cache.
+
 Alternatively, create a client and pre-warm the cache atomically:
 
 ```python

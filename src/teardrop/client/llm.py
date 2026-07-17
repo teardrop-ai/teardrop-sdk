@@ -21,12 +21,20 @@ class _LlmMixin:
         if self._llm_config_cache is not None and now < self._llm_config_cache[1] + _LLM_CONFIG_TTL:
             return self._llm_config_cache[0]
 
-        http = await self._get_http()
-        resp = await http.get(f"{self._base_url}/llm-config", headers=await self._headers())
-        self._raise_for_status(resp)
-        config = LlmConfigResponse.model_validate(resp.json())
-        self._llm_config_cache = (config, now)
-        return config
+        async with self._llm_config_lock:
+            now = time.time()
+            if (
+                self._llm_config_cache is not None
+                and now < self._llm_config_cache[1] + _LLM_CONFIG_TTL
+            ):
+                return self._llm_config_cache[0]
+
+            http = await self._get_http()
+            resp = await http.get(f"{self._base_url}/llm-config", headers=await self._headers())
+            self._raise_for_status(resp)
+            config = LlmConfigResponse.model_validate(resp.json())
+            self._llm_config_cache = (config, time.time())
+            return config
 
     async def set_llm_config(
         self,
@@ -56,16 +64,17 @@ class _LlmMixin:
         if "api_key" in request.model_fields_set and request.api_key is None:
             body["api_key"] = None
 
-        http = await self._get_http()
-        resp = await http.put(
-            f"{self._base_url}/llm-config",
-            json=body,
-            headers=await self._headers(),
-        )
-        self._raise_for_status(resp)
-        config = LlmConfigResponse.model_validate(resp.json())
-        self._llm_config_cache = (config, time.time())
-        return config
+        async with self._llm_config_lock:
+            http = await self._get_http()
+            resp = await http.put(
+                f"{self._base_url}/llm-config",
+                json=body,
+                headers=await self._headers(),
+            )
+            self._raise_for_status(resp)
+            config = LlmConfigResponse.model_validate(resp.json())
+            self._llm_config_cache = (config, time.time())
+            return config
 
     async def clear_llm_api_key(
         self,
@@ -90,11 +99,12 @@ class _LlmMixin:
         )
 
     async def delete_llm_config(self) -> LlmConfigDeletedResponse:
-        http = await self._get_http()
-        resp = await http.delete(f"{self._base_url}/llm-config", headers=await self._headers())
-        self._raise_for_status(resp)
-        self._llm_config_cache = None
-        return LlmConfigDeletedResponse.model_validate(resp.json())
+        async with self._llm_config_lock:
+            http = await self._get_http()
+            resp = await http.delete(f"{self._base_url}/llm-config", headers=await self._headers())
+            self._raise_for_status(resp)
+            self._llm_config_cache = None
+            return LlmConfigDeletedResponse.model_validate(resp.json())
 
     async def get_model_benchmarks(self) -> ModelBenchmarksResponse:
         now = time.time()
@@ -104,12 +114,20 @@ class _LlmMixin:
         ):
             return self._model_benchmarks_cache[0]
 
-        http = await self._get_http()
-        resp = await http.get(f"{self._base_url}/models/benchmarks")
-        self._raise_for_status(resp)
-        result = ModelBenchmarksResponse.model_validate(resp.json())
-        self._model_benchmarks_cache = (result, now)
-        return result
+        async with self._model_benchmarks_lock:
+            now = time.time()
+            if (
+                self._model_benchmarks_cache is not None
+                and now < self._model_benchmarks_cache[1] + _MODEL_BENCHMARKS_TTL
+            ):
+                return self._model_benchmarks_cache[0]
+
+            http = await self._get_http()
+            resp = await http.get(f"{self._base_url}/models/benchmarks")
+            self._raise_for_status(resp)
+            result = ModelBenchmarksResponse.model_validate(resp.json())
+            self._model_benchmarks_cache = (result, time.time())
+            return result
 
     async def get_org_model_benchmarks(self) -> ModelBenchmarksResponse:
         http = await self._get_http()

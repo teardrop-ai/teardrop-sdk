@@ -161,7 +161,11 @@ class TestSchedulesUpdate:
 class TestSchedulesDelete:
     async def test_returns_deleted_response(self, client, mock_http):
         mock_http.delete.return_value = _json_response(
-            {"id": _SCHEDULE["id"], "deleted_at": "2026-01-01T00:00:00Z"}
+            {
+                "id": _SCHEDULE["id"],
+                "status": "deleted",
+                "deleted_at": "2026-01-01T00:00:00Z",
+            }
         )
 
         result = await client.schedules.delete(_SCHEDULE["id"])

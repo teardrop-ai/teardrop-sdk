@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 
-from teardrop.client._core import _parse_scheduled_runs_page
+from teardrop.client._core import _parse_scheduled_runs_page, _quote_path_segment
 from teardrop.models import (
     CreateEventTriggerRequest,
     EventTrigger,
@@ -48,7 +48,7 @@ class EventTriggersModule:
     async def get(self, trigger_id: str) -> EventTrigger:
         http = await self._c._get_http()
         resp = await http.get(
-            f"{self._c._base_url}/agent/event-triggers/{trigger_id}",
+            f"{self._c._base_url}/agent/event-triggers/{_quote_path_segment(trigger_id)}",
             headers=await self._c._headers(),
         )
         self._c._raise_for_status(resp)
@@ -57,7 +57,7 @@ class EventTriggersModule:
     async def update(self, trigger_id: str, request: UpdateEventTriggerRequest) -> EventTrigger:
         http = await self._c._get_http()
         resp = await http.patch(
-            f"{self._c._base_url}/agent/event-triggers/{trigger_id}",
+            f"{self._c._base_url}/agent/event-triggers/{_quote_path_segment(trigger_id)}",
             json=request.model_dump(exclude_unset=True),
             headers=await self._c._headers(),
         )
@@ -67,7 +67,7 @@ class EventTriggersModule:
     async def delete(self, trigger_id: str) -> ScheduleDeletedResponse:
         http = await self._c._get_http()
         resp = await http.delete(
-            f"{self._c._base_url}/agent/event-triggers/{trigger_id}",
+            f"{self._c._base_url}/agent/event-triggers/{_quote_path_segment(trigger_id)}",
             headers=await self._c._headers(),
         )
         self._c._raise_for_status(resp)
@@ -76,7 +76,7 @@ class EventTriggersModule:
     async def rotate_secret(self, trigger_id: str) -> RotateSecretResponse:
         http = await self._c._get_http()
         resp = await http.post(
-            f"{self._c._base_url}/agent/event-triggers/{trigger_id}/rotate-secret",
+            f"{self._c._base_url}/agent/event-triggers/{_quote_path_segment(trigger_id)}/rotate-secret",
             headers=await self._c._headers(),
         )
         self._c._raise_for_status(resp)
@@ -96,7 +96,7 @@ class EventTriggersModule:
         if cursor is not None:
             params["cursor"] = cursor
         resp = await http.get(
-            f"{self._c._base_url}/agent/event-triggers/{trigger_id}/runs",
+            f"{self._c._base_url}/agent/event-triggers/{_quote_path_segment(trigger_id)}/runs",
             headers=await self._c._headers(),
             params=params,
         )

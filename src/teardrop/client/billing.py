@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from teardrop.client._core import _quote_path_segment
 from teardrop.models import (
-    BillingBalance,
-    BillingHistoryEntry,
+    BillingBalanceResponse,
+    BillingHistoryItem,
     BillingPricingResponse,
     CreditHistoryResponse,
-    Invoice,
+    InvoiceItem,
     InvoiceListResponse,
     StripeSessionStatusResponse,
     StripeTopupRequest,
@@ -21,11 +22,11 @@ from teardrop.models import (
 
 
 class _BillingMixin:
-    async def get_balance(self) -> BillingBalance:
+    async def get_balance(self) -> BillingBalanceResponse:
         http = await self._get_http()
         resp = await http.get(f"{self._base_url}/billing/balance", headers=await self._headers())
         self._raise_for_status(resp)
-        return BillingBalance.model_validate(resp.json())
+        return BillingBalanceResponse.model_validate(resp.json())
 
     async def get_pricing(self) -> BillingPricingResponse:
         http = await self._get_http()
@@ -33,7 +34,7 @@ class _BillingMixin:
         self._raise_for_status(resp)
         return BillingPricingResponse.model_validate(resp.json())
 
-    async def get_billing_history(self, *, limit: int = 20) -> list[BillingHistoryEntry]:
+    async def get_billing_history(self, *, limit: int = 20) -> list[BillingHistoryItem]:
         http = await self._get_http()
         params: dict[str, Any] = {"limit": limit}
         resp = await http.get(
@@ -44,8 +45,8 @@ class _BillingMixin:
         self._raise_for_status(resp)
         data = resp.json()
         if isinstance(data, list):
-            return [BillingHistoryEntry.model_validate(item) for item in data]
-        return [BillingHistoryEntry.model_validate(item) for item in data.get("items", [])]
+            return [BillingHistoryItem.model_validate(item) for item in data]
+        return [BillingHistoryItem.model_validate(item) for item in data.get("items", [])]
 
     async def get_invoices(self, *, limit: int = 20) -> InvoiceListResponse:
         http = await self._get_http()
@@ -58,14 +59,14 @@ class _BillingMixin:
         self._raise_for_status(resp)
         return InvoiceListResponse.model_validate(resp.json())
 
-    async def get_invoice(self, run_id: str) -> Invoice:
+    async def get_invoice(self, run_id: str) -> InvoiceItem:
         http = await self._get_http()
         resp = await http.get(
-            f"{self._base_url}/billing/invoice/{run_id}",
+            f"{self._base_url}/billing/invoice/{_quote_path_segment(run_id)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
-        return Invoice.model_validate(resp.json())
+        return InvoiceItem.model_validate(resp.json())
 
     async def get_credit_history(
         self, *, limit: int = 20, operation: Literal["debit", "topup"] | None = None

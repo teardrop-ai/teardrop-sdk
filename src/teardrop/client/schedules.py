@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 
-from teardrop.client._core import _parse_scheduled_runs_page
+from teardrop.client._core import _parse_scheduled_runs_page, _quote_path_segment
 from teardrop.models import (
     CreateScheduleRequest,
     ScheduleDeletedResponse,
@@ -46,7 +46,7 @@ class SchedulesModule:
     async def get(self, schedule_id: str) -> ScheduledRun:
         http = await self._c._get_http()
         resp = await http.get(
-            f"{self._c._base_url}/agent/schedules/{schedule_id}",
+            f"{self._c._base_url}/agent/schedules/{_quote_path_segment(schedule_id)}",
             headers=await self._c._headers(),
         )
         self._c._raise_for_status(resp)
@@ -55,7 +55,7 @@ class SchedulesModule:
     async def update(self, schedule_id: str, request: UpdateScheduleRequest) -> ScheduledRun:
         http = await self._c._get_http()
         resp = await http.patch(
-            f"{self._c._base_url}/agent/schedules/{schedule_id}",
+            f"{self._c._base_url}/agent/schedules/{_quote_path_segment(schedule_id)}",
             json=request.model_dump(exclude_unset=True),
             headers=await self._c._headers(),
         )
@@ -65,7 +65,7 @@ class SchedulesModule:
     async def delete(self, schedule_id: str) -> ScheduleDeletedResponse:
         http = await self._c._get_http()
         resp = await http.delete(
-            f"{self._c._base_url}/agent/schedules/{schedule_id}",
+            f"{self._c._base_url}/agent/schedules/{_quote_path_segment(schedule_id)}",
             headers=await self._c._headers(),
         )
         self._c._raise_for_status(resp)
@@ -85,7 +85,7 @@ class SchedulesModule:
         if cursor is not None:
             params["cursor"] = cursor
         resp = await http.get(
-            f"{self._c._base_url}/agent/schedules/{schedule_id}/runs",
+            f"{self._c._base_url}/agent/schedules/{_quote_path_segment(schedule_id)}/runs",
             headers=await self._c._headers(),
             params=params,
         )

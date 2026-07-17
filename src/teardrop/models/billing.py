@@ -17,6 +17,9 @@ class BillingPricingResponse(BaseModel):
     tools: list[ToolPricing] = Field(default_factory=list)
     base_cost_usdc: int = 0
     updated_at: str = ""
+    billing_enabled: bool
+    network: str = ""
+    pricing: list[dict[str, Any]] = Field(default_factory=list)
 
 
 PricingInfo = BillingPricingResponse
@@ -26,6 +29,7 @@ class CreditBalance(BaseModel):
     org_id: str
     balance_usdc: int
     spending_limit_usdc: int = 0
+    spending_limit_active: bool = False
     is_paused: bool = False
     daily_spend_usdc: int = 0
 
@@ -36,25 +40,62 @@ BillingBalance = CreditBalance
 class BillingBalanceResponse(CreditBalance):
     """Alias matching the OpenAPI schema name for GET /billing/balance."""
 
+    spending_limit_usdc: int
+    spending_limit_active: bool
+    is_paused: bool
+    daily_spend_usdc: int
+
 
 class BillingHistoryEntry(BaseModel):
-    run_id: str
-    user_id: str
-    amount_usdc: int
-    method: Literal["credit", "x402"]
-    status: Literal["pending", "settled", "failed"]
-    created_at: str
+    id: str = ""
+    run_id: str = ""
+    user_id: str = ""
+    amount_usdc: int = 0
+    method: Literal["credit", "x402"] = "credit"
+    status: Literal["pending", "settled", "failed"] = "pending"
+    tokens_in: int = 0
+    tokens_out: int = 0
+    tool_calls: int = 0
+    tool_names: list[str] = Field(default_factory=list)
+    duration_ms: int = 0
+    cost_usdc: int = 0
+    platform_fee_usdc: int = 0
+    settlement_tx: str | None = None
+    settlement_status: str = ""
+    created_at: str = ""
 
 
 class BillingHistoryItem(BillingHistoryEntry):
     """Alias matching the OpenAPI schema name for GET /billing/history."""
 
+    id: str
+    run_id: str
+    tokens_in: int
+    tokens_out: int
+    tool_calls: int
+    tool_names: list[str]
+    duration_ms: int
+    cost_usdc: int
+    platform_fee_usdc: int
+    settlement_tx: str | None
+    settlement_status: str
+    created_at: str
+
 
 class Invoice(BaseModel):
-    run_id: str
+    id: str = ""
+    run_id: str = ""
     tokens_in: int = 0
     tokens_out: int = 0
     tool_calls: int = 0
+    tool_names: list[str] = Field(default_factory=list)
+    duration_ms: int = 0
+    cost_usdc: int = 0
+    platform_fee_usdc: int = 0
+    settlement_tx: str | None = None
+    settlement_status: str = ""
+    created_at: str = ""
+    thread_id: str = ""
     total_usdc: int = 0
     breakdown: list[dict[str, Any]] = Field(default_factory=list)
     settled_at: str = ""
@@ -63,27 +104,42 @@ class Invoice(BaseModel):
 class InvoiceItem(Invoice):
     """Alias matching the OpenAPI schema name for GET /billing/invoice/{run_id}."""
 
+    id: str
+    run_id: str
+    tokens_in: int
+    tokens_out: int
+    tool_calls: int
+    tool_names: list[str]
+    duration_ms: int
+    cost_usdc: int
+    platform_fee_usdc: int
+    settlement_tx: str | None
+    settlement_status: str
+    created_at: str
+    thread_id: str
+
 
 class InvoiceListResponse(BaseModel):
     """Response from GET /billing/invoices."""
 
-    items: list[Invoice] = Field(default_factory=list)
+    items: list[InvoiceItem]
     next_cursor: str | None = None
 
 
 class CreditHistoryEntry(BaseModel):
     id: str
+    org_id: str
     amount_usdc: int
     operation: Literal["debit", "topup"]
     balance_usdc_after: int
-    reason: str | None = None
+    reason: str | None
     created_at: str
 
 
 class CreditHistoryResponse(BaseModel):
     """Response from GET /billing/credit-history."""
 
-    items: list[CreditHistoryEntry] = Field(default_factory=list)
+    items: list[CreditHistoryEntry]
     next_cursor: str | None = None
 
 
@@ -116,6 +172,9 @@ class UsdcTopupRequirements(BaseModel):
 class UsdcTopupRequirementsResponse(UsdcTopupRequirements):
     """Alias matching the OpenAPI schema name for GET /billing/topup/usdc/requirements."""
 
+    accepts: list[dict[str, Any]]
+    x402Version: int
+
 
 class UsdcTopupRequest(BaseModel):
     amount_usdc: int
@@ -125,8 +184,12 @@ class UsdcTopupRequest(BaseModel):
 class UsdcTopupResponse(BaseModel):
     """Response from POST /billing/topup/usdc."""
 
-    credited_usdc: int
+    credited_usdc: int = 0
     new_balance_usdc: int | None = None
+    status: str
+    amount_usdc: int
+    balance_usdc: int
+    tx_hash: str
 
     model_config = {"extra": "allow"}
 

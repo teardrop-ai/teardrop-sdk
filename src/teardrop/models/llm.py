@@ -84,18 +84,23 @@ class ModelInfo(BaseModel):
 class ModelBenchmarksResponse(BaseModel):
     """Response for GET /models/benchmarks and GET /models/benchmarks/org."""
 
-    models: list[ModelInfo] = Field(default_factory=list)
+    models: list[ModelInfo]
     updated_at: str = ""
 
 
 class LlmConfigResponse(OrgLlmConfig):
     """Alias matching the OpenAPI schema name for /llm-config endpoints."""
 
+    provider: str
+    model: str
+    configured: bool
+
 
 class LlmConfigDeletedResponse(BaseModel):
     """Response from DELETE /llm-config."""
 
-    org_id: str
+    org_id: str = ""
+    status: str
     deleted_at: str = ""
 
     model_config = {"extra": "allow"}

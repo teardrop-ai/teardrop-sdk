@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 class TokenResponse(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str
     expires_in: int
     refresh_token: str | None = None
 
@@ -44,6 +44,12 @@ class MeResponse(JwtPayloadBase):
 class AuthMeResponse(MeResponse):
     """Alias matching the OpenAPI schema name for GET /auth/me."""
 
+    user_id: str
+    org_id: str
+    role: str
+    auth_method: str
+    email: str
+
 
 class SiweNonceResponse(BaseModel):
     """Response from GET /auth/siwe/nonce."""
@@ -57,6 +63,7 @@ class VerifyEmailResponse(BaseModel):
     """Response from GET /auth/verify-email."""
 
     message: str = ""
+    verified: bool
 
     model_config = {"extra": "allow"}
 
@@ -64,7 +71,7 @@ class VerifyEmailResponse(BaseModel):
 class ResendVerificationResponse(BaseModel):
     """Response from POST /auth/resend-verification."""
 
-    message: str = ""
+    message: str
 
     model_config = {"extra": "allow"}
 
@@ -72,10 +79,11 @@ class ResendVerificationResponse(BaseModel):
 class CreateInviteResponse(BaseModel):
     """Response from POST /org/invite."""
 
-    invite_url: str
+    invite_url: str = ""
+    token: str
     email: str | None = None
     role: str = "member"
-    expires_at: str | None = None
+    expires_at: str
 
     model_config = {"extra": "allow"}
 

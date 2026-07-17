@@ -5,6 +5,7 @@ from __future__ import annotations
 import warnings
 from typing import Any
 
+from teardrop.client._core import _quote_path_segment
 from teardrop.models import UsageSummary
 
 
@@ -49,7 +50,7 @@ class _UsageMixin:
         if end is not None:
             params["end"] = end
         resp = await http.get(
-            f"{self._base_url}/admin/usage/org/{org_id}",
+            f"{self._base_url}/admin/usage/org/{_quote_path_segment(org_id)}",
             headers=await self._headers(),
             params=params or None,
         )
@@ -76,7 +77,7 @@ class _UsageMixin:
         if end is not None:
             params["end"] = end
         resp = await http.get(
-            f"{self._base_url}/admin/usage/{user_id}",
+            f"{self._base_url}/admin/usage/{_quote_path_segment(user_id)}",
             headers=await self._headers(),
             params=params or None,
         )

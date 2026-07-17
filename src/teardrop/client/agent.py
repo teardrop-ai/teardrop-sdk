@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Any, AsyncIterator
 
+from teardrop.client._core import _quote_path_segment
 from teardrop.models import (
     AgentDecisionListResponse,
     AgentDecisionsResponse,
@@ -103,7 +104,7 @@ class _AgentMixin:
     ) -> RunOutcomeResponse:
         http = await self._get_http()
         resp = await http.patch(
-            f"{self._base_url}/agent/runs/{run_id}/outcome",
+            f"{self._base_url}/agent/runs/{_quote_path_segment(run_id)}/outcome",
             json=request.model_dump(exclude_none=True),
             headers=await self._headers(),
         )
@@ -115,7 +116,7 @@ class _AgentMixin:
     ) -> EventDispatchResponse:
         http = await self._get_http()
         resp = await http.post(
-            f"{self._base_url}/agent/events/{trigger_token}",
+            f"{self._base_url}/agent/events/{_quote_path_segment(trigger_token)}",
             json=event_json,
             headers=await self._headers(),
         )
@@ -165,7 +166,7 @@ class _AgentMixin:
     async def remove_tool_exclusion(self, tool_name: str) -> ToolExclusionRemovedResponse:
         http = await self._get_http()
         resp = await http.delete(
-            f"{self._base_url}/agent/tool-exclusions/{tool_name}",
+            f"{self._base_url}/agent/tool-exclusions/{_quote_path_segment(tool_name)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -174,7 +175,7 @@ class _AgentMixin:
     async def delete_tool_exclusion(self, tool_name: str) -> None:
         http = await self._get_http()
         resp = await http.delete(
-            f"{self._base_url}/agent/tool-exclusions/{tool_name}",
+            f"{self._base_url}/agent/tool-exclusions/{_quote_path_segment(tool_name)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)

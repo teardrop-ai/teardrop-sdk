@@ -8,6 +8,7 @@ from teardrop.models import SSEEvent
 from teardrop.streaming import (
     EVENT_DONE,
     EVENT_RUN_STARTED,
+    EVENT_STATE_SNAPSHOT,
     EVENT_TEXT_MSG_CONTENT,
     async_collect_text,
     collect_text,
@@ -38,6 +39,16 @@ class _FakeResponse:
 
 
 class TestIterSseEvents:
+    @pytest.mark.asyncio
+    async def test_state_snapshot_event_constant_matches_spec(self):
+        lines = [
+            _sse(EVENT_STATE_SNAPSHOT, {"state": "ready"}),
+            "",
+        ]
+        events = [e async for e in iter_sse_events(_FakeResponse(lines))]
+        assert events[0].type == "STATE_SNAPSHOT"
+        assert events[0].data == {"state": "ready"}
+
     @pytest.mark.asyncio
     async def test_single_event(self):
         lines = [

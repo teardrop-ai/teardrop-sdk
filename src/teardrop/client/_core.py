@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 from typing import Any, AsyncIterator, TypeVar
+from urllib.parse import quote
 
 import anyio
 import httpx
@@ -35,6 +36,12 @@ _AGENT_CARD_TTL: int = 300
 _AGENT_CARD_MAX_BYTES: int = 65_536
 _LLM_CONFIG_TTL: int = 300
 _MODEL_BENCHMARKS_TTL: int = 600
+
+
+def _quote_path_segment(value: str) -> str:
+    """Quote a user-controlled value before placing it in a URL path."""
+    return quote(value, safe="")
+
 
 _T = TypeVar("_T", bound=BaseModel)
 
@@ -151,7 +158,9 @@ class _AsyncClientBase:
         self._agent_card_fetched_at: float = 0.0
         self._agent_card_lock: anyio.Lock = anyio.Lock()
         self._llm_config_cache: tuple[OrgLlmConfig, float] | None = None
+        self._llm_config_lock: anyio.Lock = anyio.Lock()
         self._model_benchmarks_cache: tuple[ModelBenchmarksResponse, float] | None = None
+        self._model_benchmarks_lock: anyio.Lock = anyio.Lock()
 
     async def _get_http(self) -> _HttpProxy:
         if self._http is None or self._http.is_closed:

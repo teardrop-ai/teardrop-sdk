@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from teardrop.client._core import _quote_path_segment
 from teardrop.models import (
     MarketplaceAuthorConfigResponse,
     MarketplaceAuthorProfileResponse,
@@ -56,7 +57,7 @@ class _MarketplaceMixin:
     ) -> MarketplaceCatalogDetailResponse:
         http = await self._get_http()
         resp = await http.get(
-            f"{self._base_url}/marketplace/catalog/{org_slug}/{tool_name}",
+            f"{self._base_url}/marketplace/catalog/{_quote_path_segment(org_slug)}/{_quote_path_segment(tool_name)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -83,7 +84,7 @@ class _MarketplaceMixin:
     async def get_author_profile(self, org_slug: str) -> MarketplaceAuthorProfileResponse:
         http = await self._get_http()
         resp = await http.get(
-            f"{self._base_url}/marketplace/authors/{org_slug}",
+            f"{self._base_url}/marketplace/authors/{_quote_path_segment(org_slug)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -186,7 +187,7 @@ class _MarketplaceMixin:
     async def unsubscribe(self, subscription_id: str) -> UnsubscribeResponse:
         http = await self._get_http()
         resp = await http.delete(
-            f"{self._base_url}/marketplace/subscriptions/{subscription_id}",
+            f"{self._base_url}/marketplace/subscriptions/{_quote_path_segment(subscription_id)}",
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
@@ -204,7 +205,7 @@ class _MarketplaceMixin:
         http = await self._get_http()
         request = RunFeedbackRequest(run_id=run_id, rating=rating, comment=comment)
         resp = await http.post(
-            f"{self._base_url}/marketplace/tools/{org_slug}/{tool_name}/feedback",
+            f"{self._base_url}/marketplace/tools/{_quote_path_segment(org_slug)}/{_quote_path_segment(tool_name)}/feedback",
             json=request.model_dump(exclude_none=True),
             headers=await self._headers(),
         )

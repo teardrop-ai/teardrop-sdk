@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 class ToolPolicy(BaseModel):
     """Per-run tool exclusion policy for agent runs."""
 
-    exclude_names: list[str] = Field(default_factory=list)
+    exclude_names: list[str] = Field(default_factory=list, max_length=50)
 
 
 class ToolExclusionRequest(BaseModel):
@@ -53,6 +53,11 @@ class AgentTool(BaseModel):
     name: str
     source: Literal["platform", "org", "marketplace"]
     access_mode: Literal["included", "subscribed"]
+    qualified_name: str
+    display_name: str
+    description: str
+    cost_usdc: int
+    input_schema: dict[str, Any]
 
 
 AgentToolItem = AgentTool
@@ -95,7 +100,7 @@ class AgentDecisionRecord(BaseModel):
 class AgentDecisionListResponse(BaseModel):
     """Response from GET /agent/decisions."""
 
-    items: list[AgentDecisionRecord] = Field(default_factory=list)
+    items: list[AgentDecisionRecord]
     next_cursor: str | None = None
 
 
@@ -131,7 +136,10 @@ class EventDispatchResponse(BaseModel):
     """Response from POST /agent/events/{trigger_token}."""
 
     accepted: bool
-    run_id: str | None = None
+    run_id: str | None
+    status: str
+    schedule_id: str | None
+    result_path: str | None
 
     model_config = {"extra": "allow"}
 
@@ -139,7 +147,7 @@ class EventDispatchResponse(BaseModel):
 class ToolExclusionListResponse(BaseModel):
     """Response from GET /agent/tool-exclusions."""
 
-    tool_names: list[str] = Field(default_factory=list)
+    tool_names: list[str]
 
 
 class ToolExclusionsResponse(ToolExclusionListResponse):

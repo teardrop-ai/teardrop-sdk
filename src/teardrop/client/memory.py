@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from teardrop.client._core import _quote_path_segment
 from teardrop.models import (
     MemoryCreatedResponse,
     MemoryDeletedResponse,
@@ -37,7 +38,8 @@ class _MemoryMixin:
     async def delete_memory(self, memory_id: str) -> MemoryDeletedResponse:
         http = await self._get_http()
         resp = await http.delete(
-            f"{self._base_url}/memories/{memory_id}", headers=await self._headers()
+            f"{self._base_url}/memories/{_quote_path_segment(memory_id)}",
+            headers=await self._headers(),
         )
         self._raise_for_status(resp)
         return MemoryDeletedResponse.model_validate(resp.json())

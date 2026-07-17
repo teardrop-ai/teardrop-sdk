@@ -31,6 +31,9 @@ async for event in client.run("Hello!", tool_policy=policy):
     ...
 ```
 
+`exclude_names` accepts at most 50 tool names per run. The limit is enforced by
+the request model before an HTTP request is sent.
+
 **Available Tools**: The agent automatically discovers and can call:
 - Built-in Teardrop tools
 - Marketplace tools you're subscribed to (see [Marketplace](marketplace.md))
@@ -106,10 +109,14 @@ class SSEEvent:
 | `TOOL_CALL_START` | `tool_call_id`, `tool_name`, `args` | Agent is calling a tool |
 | `TOOL_CALL_END` | `tool_call_id`, `result` | Tool returned |
 | `SURFACE_UPDATE` | `surface`, `content` | UI surface payload |
+| `STATE_SNAPSHOT` | *(server-defined object)* | Current UI/application state snapshot |
 | `USAGE_SUMMARY` | `tokens_in`, `tokens_out`, `tool_calls`, `cache_read_tokens`, `cache_creation_tokens` | Per-run token usage |
 | `BILLING_SETTLEMENT` | `run_id`, `cost_usdc` | Credit deducted |
 | `ERROR` | `message`, `code` | Non-fatal error during run |
 | `DONE` | *(empty)* | Stream complete |
+
+The event name is also exported as `EVENT_STATE_SNAPSHOT` from
+`teardrop.streaming` and `teardrop`.
 
 ## x402 On-chain Payments
 

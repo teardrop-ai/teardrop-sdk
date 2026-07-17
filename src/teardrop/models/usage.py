@@ -18,6 +18,9 @@ class UsageSummary(BaseModel):
 class PricingRuleWithOverrides(BaseModel):
     """Pricing rule returned inside some admin/tool pricing responses."""
 
+    id: str
+    name: str
+    run_price_usdc: int
     tool_name: str
     base_price_usdc: int
     overrides: dict[str, int] = {}

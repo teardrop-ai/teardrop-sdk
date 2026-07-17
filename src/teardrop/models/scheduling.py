@@ -28,11 +28,11 @@ class ScheduledRun(BaseModel):
     interval_seconds: int
     enabled: bool
     callback_url: str | None = None
-    next_run_at: str | None = None
+    next_run_at: str | None
     last_run_at: str | None = None
-    consecutive_failures: int = 0
-    created_at: str = ""
-    updated_at: str = ""
+    consecutive_failures: int
+    created_at: str
+    updated_at: str
 
     model_config = {"extra": "allow"}
 
@@ -43,7 +43,7 @@ ScheduledRunItem = ScheduledRun
 class ScheduledRunListResponse(BaseModel):
     """Response from GET /agent/schedules."""
 
-    items: list[ScheduledRun] = Field(default_factory=list)
+    items: list[ScheduledRun]
     next_cursor: str | None = None
 
 
@@ -54,9 +54,9 @@ class ScheduledRunResult(BaseModel):
     run_id: str
     status: str
     output_text: str = ""
-    cost_usdc: int = 0
+    cost_usdc: int
     error: str = ""
-    created_at: str = ""
+    created_at: str
 
     model_config = {"extra": "allow"}
 
@@ -72,7 +72,7 @@ class ScheduledRunsPage(BaseModel):
 class ScheduledRunResultsResponse(BaseModel):
     """Alias matching OpenAPI schema for schedule/trigger run lists."""
 
-    items: list[ScheduledRunResult] = Field(default_factory=list)
+    items: list[ScheduledRunResult]
     next_cursor: str | None = None
 
 
@@ -112,10 +112,10 @@ class EventTrigger(BaseModel):
     callback_url: str | None = None
     trigger_token: str | None = None
     event_path: str | None = None
-    consecutive_failures: int = 0
+    consecutive_failures: int
     last_run_at: str | None = None
-    created_at: str = ""
-    updated_at: str = ""
+    created_at: str
+    updated_at: str
 
     model_config = {"extra": "allow"}
 
@@ -126,7 +126,7 @@ EventTriggerItem = EventTrigger
 class EventTriggerListResponse(BaseModel):
     """Response from GET /agent/event-triggers."""
 
-    items: list[EventTrigger] = Field(default_factory=list)
+    items: list[EventTrigger]
     next_cursor: str | None = None
 
 
@@ -164,7 +164,8 @@ class UpdateEventTriggerRequest(BaseModel):
 class ScheduleDeletedResponse(BaseModel):
     """Response from DELETE /agent/schedules/{schedule_id}."""
 
-    id: str
+    id: str = ""
+    status: str
     deleted_at: str = ""
 
     model_config = {"extra": "allow"}

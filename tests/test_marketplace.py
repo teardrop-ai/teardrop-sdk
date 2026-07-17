@@ -212,7 +212,7 @@ class TestMarketplaceDiscovery:
 
 class TestGetMarketplaceBalance:
     async def test_returns_balance_response(self, client, mock_http):
-        mock_http.get.return_value = _json_response({"balance_usdc": 50000})
+        mock_http.get.return_value = _json_response({"org_id": "org-1", "balance_usdc": 50000})
         result = await client.get_marketplace_balance()
         assert isinstance(result, MarketplaceBalanceResponse)
         assert result.balance_usdc == 50000
@@ -262,7 +262,9 @@ class TestWithdraw:
         mock_http.post.return_value = _json_response(
             {
                 "id": "w-1",
+                "org_id": "org-1",
                 "amount_usdc": 500_000,
+                "wallet": "0xWALLET",
                 "tx_hash": "0xABC",
                 "status": "pending",
                 "created_at": "2026-01-01T00:00:00Z",
@@ -275,7 +277,14 @@ class TestWithdraw:
 
     async def test_amount_in_body(self, client, mock_http):
         mock_http.post.return_value = _json_response(
-            {"id": "w-1", "amount_usdc": 250_000, "status": "pending"}
+            {
+                "id": "w-1",
+                "org_id": "org-1",
+                "amount_usdc": 250_000,
+                "wallet": "0xWALLET",
+                "status": "pending",
+                "created_at": "2026-01-01T00:00:00Z",
+            }
         )
         request = WithdrawRequest(amount_usdc=250_000)
         await client.withdraw(request)
@@ -294,6 +303,7 @@ class TestGetWithdrawals:
                     {
                         "id": "w-1",
                         "amount_usdc": 100,
+                        "wallet": "0xWALLET",
                         "status": "completed",
                         "created_at": "2026-01-01T00:00:00Z",
                     }
@@ -311,8 +321,20 @@ class TestGetWithdrawals:
         mock_http.get.return_value = _json_response(
             {
                 "withdrawals": [
-                    {"id": "w-1", "amount_usdc": 100, "status": "completed"},
-                    {"id": "w-2", "amount_usdc": 200, "status": "completed"},
+                    {
+                        "id": "w-1",
+                        "amount_usdc": 100,
+                        "wallet": "0xWALLET",
+                        "status": "completed",
+                        "created_at": "2026-01-01T00:00:00Z",
+                    },
+                    {
+                        "id": "w-2",
+                        "amount_usdc": 200,
+                        "wallet": "0xWALLET",
+                        "status": "completed",
+                        "created_at": "2026-01-01T00:00:00Z",
+                    },
                 ],
                 "next_cursor": None,
             }

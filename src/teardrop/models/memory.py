@@ -14,7 +14,7 @@ class StoreMemoryRequest(BaseModel):
 class MemoryEntry(BaseModel):
     id: str
     content: str
-    created_at: str = ""
+    created_at: str
     source_run_id: str | None = None
 
 
@@ -25,9 +25,9 @@ class MemoryListItem(MemoryEntry):
 class MemoryListResponse(BaseModel):
     """Response from GET /memories."""
 
-    items: list[MemoryEntry] = Field(default_factory=list)
+    items: list[MemoryEntry]
     next_cursor: str | None = None
-    total: int = 0
+    total: int
 
 
 class MemoryCreatedResponse(MemoryEntry):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from unittest.mock import AsyncMock, patch
@@ -44,6 +45,7 @@ _ORG_LLM_CONFIG = {
     "is_byok": False,
     "created_at": "2026-04-16T00:00:00Z",
     "updated_at": "2026-04-16T00:00:00Z",
+    "configured": True,
 }
 
 _BENCHMARKS_RESPONSE = {
@@ -108,6 +110,30 @@ class TestGetLlmConfig:
 
         # Only one HTTP call despite two method calls.
         assert mock_http.get.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_concurrent_cache_misses_share_one_request(self):
+        request_started = asyncio.Event()
+        release_request = asyncio.Event()
+
+        async def delayed_get(*args, **kwargs):
+            request_started.set()
+            await release_request.wait()
+            return _json_response(_ORG_LLM_CONFIG)
+
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(side_effect=delayed_get)
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            tasks = [asyncio.create_task(client.get_llm_config()) for _ in range(3)]
+            await request_started.wait()
+            release_request.set()
+            results = await asyncio.gather(*tasks)
+
+        assert mock_http.get.call_count == 1
+        assert all(result == results[0] for result in results)
 
     @pytest.mark.asyncio
     async def test_cache_expires_after_ttl(self):
@@ -312,7 +338,13 @@ class TestDeleteLlmConfig:
         mock_http = AsyncMock()
         mock_http.is_closed = False
         mock_http.delete = AsyncMock(
-            return_value=_json_response({"org_id": "org-1", "deleted_at": "2026-01-01T00:00:00Z"})
+            return_value=_json_response(
+                {
+                    "org_id": "org-1",
+                    "status": "deleted",
+                    "deleted_at": "2026-01-01T00:00:00Z",
+                }
+            )
         )
 
         async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
@@ -329,7 +361,13 @@ class TestDeleteLlmConfig:
         mock_http.is_closed = False
         mock_http.get = AsyncMock(return_value=_json_response(_ORG_LLM_CONFIG))
         mock_http.delete = AsyncMock(
-            return_value=_json_response({"org_id": "org-1", "deleted_at": "2026-01-01T00:00:00Z"})
+            return_value=_json_response(
+                {
+                    "org_id": "org-1",
+                    "status": "deleted",
+                    "deleted_at": "2026-01-01T00:00:00Z",
+                }
+            )
         )
 
         async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
@@ -388,6 +426,30 @@ class TestGetModelBenchmarks:
             await client.get_model_benchmarks()
 
         assert mock_http.get.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_concurrent_cache_misses_share_one_request(self):
+        request_started = asyncio.Event()
+        release_request = asyncio.Event()
+
+        async def delayed_get(*args, **kwargs):
+            request_started.set()
+            await release_request.wait()
+            return _json_response(_BENCHMARKS_RESPONSE)
+
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.get = AsyncMock(side_effect=delayed_get)
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            tasks = [asyncio.create_task(client.get_model_benchmarks()) for _ in range(3)]
+            await request_started.wait()
+            release_request.set()
+            results = await asyncio.gather(*tasks)
+
+        assert mock_http.get.call_count == 1
+        assert all(result == results[0] for result in results)
 
     @pytest.mark.asyncio
     async def test_cache_expires_after_ttl(self):

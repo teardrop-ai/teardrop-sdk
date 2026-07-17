@@ -9,6 +9,7 @@ import httpx
 
 from teardrop.client import TeardropClient
 from teardrop.models import (
+    AgentCard,
     BillingBalance,
     CreateEventTriggerRequest,
     CreateScheduleRequest,
@@ -65,6 +66,46 @@ class TestRunSync:
 
 
 class TestSyncDelegation:
+    def test_get_agent_card_forwards_force_refresh(self):
+        card = AgentCard(name="agent")
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with patch.object(
+                client._async, "get_agent_card", new=AsyncMock(return_value=card)
+            ) as get_agent_card:
+                assert client.get_agent_card(force_refresh=True) == card
+
+        get_agent_card.assert_awaited_once_with(force_refresh=True)
+
+    def test_clear_llm_api_key_delegates(self):
+        from teardrop.models import LlmConfigResponse
+
+        response = LlmConfigResponse(
+            org_id="org-1",
+            provider="openai",
+            model="gpt-4o",
+            has_api_key=False,
+            configured=True,
+        )
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with patch.object(
+                client._async,
+                "clear_llm_api_key",
+                new=AsyncMock(return_value=response),
+            ) as clear_api_key:
+                assert client.clear_llm_api_key(provider="openai", model="gpt-4o") == response
+
+        clear_api_key.assert_awaited_once_with(
+            provider="openai",
+            model="gpt-4o",
+            routing_preference="default",
+            api_base=None,
+            max_tokens=4096,
+            temperature=0.0,
+            timeout_seconds=120,
+        )
+
     def test_legacy_admin_usage_delegates(self):
         result = UsageSummary(total_runs=1)
 
@@ -274,6 +315,10 @@ class TestSyncDelegation:
             schedule_kind="interval",
             interval_seconds=86400,
             enabled=True,
+            next_run_at=None,
+            consecutive_failures=0,
+            created_at="2026-01-01T00:00:00Z",
+            updated_at="2026-01-01T00:00:00Z",
         )
 
         with TeardropClient("http://test", token="tok.en.sig") as client:
@@ -304,6 +349,9 @@ class TestSyncDelegation:
             trigger_token="tok-1",
             event_path="/agent/events/tok-1",
             secret="secret-1",
+            consecutive_failures=0,
+            created_at="2026-01-01T00:00:00Z",
+            updated_at="2026-01-01T00:00:00Z",
         )
 
         with TeardropClient("http://test", token="tok.en.sig") as client:
@@ -330,6 +378,8 @@ class TestSyncDelegation:
                     org_id="org-1",
                     run_id="core-run-1",
                     status="completed",
+                    cost_usdc=0,
+                    created_at="2026-01-01T00:00:00Z",
                 )
             ],
             next_cursor="page-2",
@@ -342,6 +392,8 @@ class TestSyncDelegation:
                     org_id="org-1",
                     run_id="core-run-2",
                     status="completed",
+                    cost_usdc=0,
+                    created_at="2026-01-01T00:00:00Z",
                 )
             ],
             next_cursor=None,
@@ -368,6 +420,8 @@ class TestSyncDelegation:
                     org_id="org-1",
                     run_id="event-run-1",
                     status="completed",
+                    cost_usdc=0,
+                    created_at="2026-01-01T00:00:00Z",
                 )
             ],
             next_cursor="page-2",
@@ -380,6 +434,8 @@ class TestSyncDelegation:
                     org_id="org-1",
                     run_id="event-run-2",
                     status="completed",
+                    cost_usdc=0,
+                    created_at="2026-01-01T00:00:00Z",
                 )
             ],
             next_cursor=None,
