@@ -165,3 +165,59 @@ class TestDeleteTool:
         )
         with pytest.raises(APIError):
             await client.delete_tool("missing")
+
+
+class TestTestWebhook:
+    @pytest.mark.asyncio
+    async def test_returns_success_response(self, client, mock_http):
+        from teardrop.models import TestWebhookRequest, TestWebhookResponse
+
+        mock_http.post = AsyncMock(
+            return_value=_json_response(
+                {
+                    "success": True,
+                    "status_code": 200,
+                    "latency_ms": 87,
+                    "response_body": {"ok": True},
+                    "error": None,
+                }
+            )
+        )
+        result = await client.test_webhook(
+            TestWebhookRequest(webhook_url="https://example.com/hook", payload={"a": 1})
+        )
+        assert isinstance(result, TestWebhookResponse)
+        assert result.success is True
+        assert result.status_code == 200
+        assert result.response_body == {"ok": True}
+
+    @pytest.mark.asyncio
+    async def test_posts_to_test_webhook_endpoint(self, client, mock_http):
+        from teardrop.models import TestWebhookRequest
+
+        mock_http.post = AsyncMock(
+            return_value=_json_response(
+                {
+                    "success": False,
+                    "status_code": None,
+                    "latency_ms": 5,
+                    "response_body": None,
+                    "error": "connection refused",
+                }
+            )
+        )
+        await client.test_webhook(TestWebhookRequest(webhook_url="https://example.com/hook"))
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/tools/test-webhook"
+        assert kwargs["json"]["webhook_url"] == "https://example.com/hook"
+
+    @pytest.mark.asyncio
+    async def test_422_raises_validation_error(self, client, mock_http):
+        from teardrop.exceptions import ValidationError
+        from teardrop.models import TestWebhookRequest
+
+        mock_http.post = AsyncMock(
+            return_value=_json_response({"detail": "Invalid URL"}, status=422)
+        )
+        with pytest.raises(ValidationError):
+            await client.test_webhook(TestWebhookRequest(webhook_url="not-a-url"))

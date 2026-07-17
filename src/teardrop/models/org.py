@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class OrgCredentialsEntry(BaseModel):
@@ -10,12 +10,6 @@ class OrgCredentialsEntry(BaseModel):
 
     client_id: str
     created_at: str = ""
-
-
-class OrgCredentialsResponse(BaseModel):
-    """Response from GET /org/credentials."""
-
-    credentials: list[OrgCredentialsEntry] = Field(default_factory=list)
 
 
 class RegenerateCredentialsResponse(BaseModel):

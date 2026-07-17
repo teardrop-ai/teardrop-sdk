@@ -375,6 +375,56 @@ class TestDiscoverMcpServerTools:
         assert url_called == "http://test/mcp/servers/srv-1/discover"
 
 
+# ─── test_mcp_tool ────────────────────────────────────────────────────────────
+
+
+class TestTestMcpTool:
+    @pytest.mark.asyncio
+    async def test_returns_success_response(
+        self, client: AsyncTeardropClient, mock_http: AsyncMock
+    ) -> None:
+        from teardrop.models import TestMcpToolRequest, TestMcpToolResponse
+
+        mock_http.post = AsyncMock(
+            return_value=_json_response(
+                {"success": True, "latency_ms": 42, "result": {"echo": "hi"}, "error": None}
+            )
+        )
+        result = await client.test_mcp_tool(
+            "srv-1", TestMcpToolRequest(tool_name="search", args={"q": "hi"})
+        )
+        assert isinstance(result, TestMcpToolResponse)
+        assert result.success is True
+        assert result.latency_ms == 42
+        assert result.result == {"echo": "hi"}
+
+    @pytest.mark.asyncio
+    async def test_posts_to_test_tool_endpoint(
+        self, client: AsyncTeardropClient, mock_http: AsyncMock
+    ) -> None:
+        from teardrop.models import TestMcpToolRequest
+
+        mock_http.post = AsyncMock(
+            return_value=_json_response(
+                {"success": False, "latency_ms": 10, "result": None, "error": "timeout"}
+            )
+        )
+        await client.test_mcp_tool("srv-1", TestMcpToolRequest(tool_name="search"))
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/mcp/servers/srv-1/test-tool"
+        assert kwargs["json"] == {"tool_name": "search", "args": {}}
+
+    @pytest.mark.asyncio
+    async def test_404_raises_not_found(
+        self, client: AsyncTeardropClient, mock_http: AsyncMock
+    ) -> None:
+        from teardrop.models import TestMcpToolRequest
+
+        mock_http.post = AsyncMock(return_value=_json_response({"detail": "Not found"}, status=404))
+        with pytest.raises(NotFoundError):
+            await client.test_mcp_tool("missing-srv", TestMcpToolRequest(tool_name="search"))
+
+
 # ─── parse_mcp_tool_name ──────────────────────────────────────────────────────
 
 

@@ -13,6 +13,23 @@ class ToolPolicy(BaseModel):
     exclude_names: list[str] = Field(default_factory=list)
 
 
+class ToolExclusionRequest(BaseModel):
+    """Request body for POST /agent/tool-exclusions."""
+
+    tool_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Internal tool name to exclude (unprefixed, e.g. 'web_search').",
+    )
+
+
+class RunOutcomeRequest(BaseModel):
+    """Request body for PATCH /agent/runs/{run_id}/outcome."""
+
+    rating: int = Field(..., ge=-1, le=1, description="-1 (bad), 0 (neutral), or 1 (good).")
+
+
 class AgentRunRequest(BaseModel):
     message: str = Field(..., max_length=4096)
     thread_id: str = ""
@@ -53,3 +70,38 @@ class AgentCard(BaseModel):
     skills: list[dict[str, Any]] = Field(default_factory=list)
 
     model_config = {"extra": "allow"}
+
+
+class ToolExclusionsResponse(BaseModel):
+    """Response from GET /agent/tool-exclusions."""
+
+    tool_names: list[str] = Field(default_factory=list)
+
+
+class ToolExclusionCreateResponse(BaseModel):
+    """Response from POST /agent/tool-exclusions."""
+
+    status: str = "added"
+    tool_name: str
+
+
+class DecisionRecord(BaseModel):
+    """A single decision graph record representing a completed agent run action."""
+
+    id: str
+    run_id: str
+    task_class: str | None = None
+    action: str
+    reasoning: str
+    confidence: float
+    tool_names: list[str] = Field(default_factory=list)
+    outcome: int | None = None
+    outcome_source: str | None = None
+    created_at: str
+
+
+class AgentDecisionsResponse(BaseModel):
+    """Paginated list of decision-graph records."""
+
+    items: list[DecisionRecord] = Field(default_factory=list)
+    next_cursor: str | None = None

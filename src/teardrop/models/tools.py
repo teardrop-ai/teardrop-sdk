@@ -58,3 +58,24 @@ class OrgTool(BaseModel):
 
 
 CustomTool = OrgTool
+
+
+class TestWebhookRequest(BaseModel):
+    """Request body for POST /tools/test-webhook (pre-publish diagnostic probe)."""
+
+    webhook_url: str = Field(..., max_length=2048)
+    webhook_method: str = Field(default="POST", pattern=r"^(GET|POST|PUT)$")
+    payload: dict[str, Any] = Field(default_factory=dict)
+    auth_header_name: str | None = Field(default=None, max_length=64)
+    auth_header_value: str | None = Field(default=None, max_length=4096)
+    timeout_seconds: int = Field(default=10, ge=1, le=30)
+
+
+class TestWebhookResponse(BaseModel):
+    """Diagnostic result of a test webhook invocation (always HTTP 200 on proxy success)."""
+
+    success: bool
+    status_code: int | None = None
+    latency_ms: int
+    response_body: dict[str, Any] | None = None
+    error: str | None = None

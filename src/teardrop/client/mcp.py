@@ -7,6 +7,8 @@ from teardrop.models import (
     CreateMcpServerRequest,
     DiscoverMcpToolsResponse,
     OrgMcpServer,
+    TestMcpToolRequest,
+    TestMcpToolResponse,
     UpdateMcpServerRequest,
 )
 
@@ -63,3 +65,15 @@ class _McpMixin:
         )
         self._raise_for_status(resp)
         return DiscoverMcpToolsResponse.model_validate(resp.json())
+
+    async def test_mcp_tool(
+        self, server_id: str, request: TestMcpToolRequest
+    ) -> TestMcpToolResponse:
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/mcp/servers/{server_id}/test-tool",
+            json=request.model_dump(exclude_none=True),
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return TestMcpToolResponse.model_validate(resp.json())

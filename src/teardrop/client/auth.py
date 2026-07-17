@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from teardrop.models import MeResponse, TokenResponse
+from teardrop.models import (
+    MeResponse,
+    OrgCredentialsEntry,
+    RegenerateCredentialsResponse,
+    TokenResponse,
+)
 
 
 class _AuthMixin:
@@ -102,3 +107,21 @@ class _AuthMixin:
         )
         self._raise_for_status(resp)
         return resp.json()
+
+    async def get_org_credentials(self) -> list[OrgCredentialsEntry]:
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/org/credentials",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return [OrgCredentialsEntry.model_validate(x) for x in resp.json()]
+
+    async def regenerate_org_credentials(self) -> RegenerateCredentialsResponse:
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/org/credentials/regenerate",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return RegenerateCredentialsResponse.model_validate(resp.json())

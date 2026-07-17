@@ -34,6 +34,13 @@ for tool in catalog["tools"]:
     print(f"{tool.org_slug}/{tool.name}: {tool.description}")
     print(f"  Price: ${tool.base_price_usdc / 1_000_000}")
     print(f"  Author: {tool.author_name}")
+
+# Fetch a single catalog tool by qualified name parts
+tool = await client.get_marketplace_catalog_detail("acme", "web_search")
+# → MarketplaceTool
+
+# Public author profile (metadata + published tools)
+profile = await client.get_marketplace_author_profile("acme", sort="popularity", limit=20)
 ```
 
 ## Subscriptions & Integration
@@ -96,6 +103,60 @@ result = await client.withdraw(WithdrawRequest(amount_usdc=1_000_000))
 withdrawals = await client.get_withdrawals(limit=20)
 for wd in withdrawals:
     print(f"{wd.amount_usdc} → settled {wd.settled_at}")
+```
+
+### Importing Tools From an MCP Server
+
+Publish tools from an already-registered MCP server (see [MCP Servers](mcp-servers.md))
+directly to the marketplace, without hand-writing a webhook tool definition.
+
+```python
+from teardrop.models import (
+    MarketplaceImportPreviewRequest,
+    MarketplaceImportPublishRequest,
+    MarketplaceImportPublishToolRequest,
+)
+
+# 1. Preview importable tools on a registered MCP server
+preview = await client.preview_marketplace_import(
+    MarketplaceImportPreviewRequest(server_id="mcp-server-123")
+)
+# → MarketplaceImportPreviewResponse
+for tool in preview.tools:
+    print(tool.remote_tool_name, tool.proposed_name)
+
+# 2. Publish selected tools as marketplace-visible MCP-backed org tools
+res = await client.publish_marketplace_import(
+    MarketplaceImportPublishRequest(
+        server_id="mcp-server-123",
+        tools=[
+            MarketplaceImportPublishToolRequest(
+                remote_tool_name="search",
+                name="web_search",
+                description="Search the web",
+                base_price_usdc=1_000,
+            )
+        ],
+    )
+)
+# → MarketplaceImportPublishResponse
+```
+
+### Tool Quality Feedback
+
+Submit a ground-truth quality signal for a tool call made within one of your
+own runs (scoped to the calling user's invoice history):
+
+```python
+from teardrop.models import RunFeedbackRequest
+
+feedback = await client.submit_marketplace_tool_feedback(
+    "acme",
+    "web_search",
+    RunFeedbackRequest(run_id="run-abc123", rating=1, comment="Fast and accurate"),
+)
+# → MarketplaceToolFeedbackResponse
+print(feedback.id, feedback.created_at)
 ```
 
 ## Using Marketplace Tools in Agent Runs

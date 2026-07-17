@@ -10,6 +10,7 @@ from teardrop.client.schedules import _SyncSchedulesModule
 from teardrop.models import (
     AddTrustedAgentRequest,
     AgentCard,
+    AgentDecisionsResponse,
     AgentTool,
     AgentWallet,
     AuthorConfig,
@@ -23,18 +24,34 @@ from teardrop.models import (
     EarningsEntry,
     JwtPayloadBase,
     LinkWalletRequest,
+    MarketplaceImportPreviewRequest,
+    MarketplaceImportPreviewResponse,
+    MarketplaceImportPublishRequest,
+    MarketplaceImportPublishResponse,
     MarketplaceSubscription,
+    MarketplaceToolFeedbackResponse,
     MemoryEntry,
     ModelBenchmarksResponse,
+    OrgCredentialsEntry,
     OrgLlmConfig,
     OrgMcpServer,
     OrgTool,
+    RegenerateCredentialsResponse,
+    RunFeedbackRequest,
+    RunOutcomeRequest,
     SSEEvent,
     StoreMemoryRequest,
     StripeTopupRequest,
     StripeTopupResponse,
     StripeTopupStatusResponse,
+    TestMcpToolRequest,
+    TestMcpToolResponse,
+    TestWebhookRequest,
+    TestWebhookResponse,
     TokenResponse,
+    ToolExclusionCreateResponse,
+    ToolExclusionRequest,
+    ToolExclusionsResponse,
     TrustedAgent,
     UpdateMcpServerRequest,
     UpdateOrgToolRequest,
@@ -81,6 +98,21 @@ class TeardropClient:
     def get_agent_tools(self) -> list[AgentTool]:
         return self._run(self._async.get_agent_tools())
 
+    def list_tool_exclusions(self) -> ToolExclusionsResponse:
+        return self._run(self._async.list_tool_exclusions())
+
+    def create_tool_exclusion(self, request: ToolExclusionRequest) -> ToolExclusionCreateResponse:
+        return self._run(self._async.create_tool_exclusion(request))
+
+    def delete_tool_exclusion(self, tool_name: str) -> None:
+        return self._run(self._async.delete_tool_exclusion(tool_name))
+
+    def get_agent_decisions(self, **kwargs: Any) -> AgentDecisionsResponse:
+        return self._run(self._async.get_agent_decisions(**kwargs))
+
+    def set_run_outcome(self, run_id: str, request: RunOutcomeRequest) -> dict[str, Any]:
+        return self._run(self._async.set_run_outcome(run_id, request))
+
     def get_siwe_nonce(self) -> dict[str, str]:
         return self._run(self._async.get_siwe_nonce())
 
@@ -110,6 +142,12 @@ class TeardropClient:
 
     def invite(self, **kwargs: Any) -> dict[str, Any]:
         return self._run(self._async.invite(**kwargs))
+
+    def get_org_credentials(self) -> list[OrgCredentialsEntry]:
+        return self._run(self._async.get_org_credentials())
+
+    def regenerate_org_credentials(self) -> RegenerateCredentialsResponse:
+        return self._run(self._async.regenerate_org_credentials())
 
     def get_balance(self) -> BillingBalance:
         return self._run(self._async.get_balance())
@@ -173,6 +211,9 @@ class TeardropClient:
     def delete_tool(self, tool_id: str) -> None:
         return self._run(self._async.delete_tool(tool_id))
 
+    def test_webhook(self, request: TestWebhookRequest) -> TestWebhookResponse:
+        return self._run(self._async.test_webhook(request))
+
     def create_mcp_server(self, request: CreateMcpServerRequest) -> OrgMcpServer:
         return self._run(self._async.create_mcp_server(request))
 
@@ -191,6 +232,9 @@ class TeardropClient:
     def discover_mcp_server_tools(self, server_id: str) -> DiscoverMcpToolsResponse:
         return self._run(self._async.discover_mcp_server_tools(server_id))
 
+    def test_mcp_tool(self, server_id: str, request: TestMcpToolRequest) -> TestMcpToolResponse:
+        return self._run(self._async.test_mcp_tool(server_id, request))
+
     def list_memories(self, *, limit: int = 50) -> list[MemoryEntry]:
         return self._run(self._async.list_memories(limit=limit))
 
@@ -202,6 +246,12 @@ class TeardropClient:
 
     def get_marketplace_catalog(self, **kwargs: Any) -> dict[str, Any]:
         return self._run(self._async.get_marketplace_catalog(**kwargs))
+
+    def get_marketplace_catalog_detail(self, org_slug: str, tool_name: str):
+        return self._run(self._async.get_marketplace_catalog_detail(org_slug, tool_name))
+
+    def get_marketplace_author_profile(self, org_slug: str, **kwargs: Any) -> dict[str, Any]:
+        return self._run(self._async.get_marketplace_author_profile(org_slug, **kwargs))
 
     def set_author_config(self, settlement_wallet: str) -> AuthorConfig:
         return self._run(self._async.set_author_config(settlement_wallet))
@@ -229,6 +279,21 @@ class TeardropClient:
 
     def unsubscribe(self, subscription_id: str) -> None:
         return self._run(self._async.unsubscribe(subscription_id))
+
+    def preview_marketplace_import(
+        self, request: MarketplaceImportPreviewRequest
+    ) -> MarketplaceImportPreviewResponse:
+        return self._run(self._async.preview_marketplace_import(request))
+
+    def publish_marketplace_import(
+        self, request: MarketplaceImportPublishRequest
+    ) -> MarketplaceImportPublishResponse:
+        return self._run(self._async.publish_marketplace_import(request))
+
+    def submit_marketplace_tool_feedback(
+        self, org_slug: str, tool_name: str, request: RunFeedbackRequest
+    ) -> MarketplaceToolFeedbackResponse:
+        return self._run(self._async.submit_marketplace_tool_feedback(org_slug, tool_name, request))
 
     def get_llm_config(self) -> OrgLlmConfig:
         return self._run(self._async.get_llm_config())

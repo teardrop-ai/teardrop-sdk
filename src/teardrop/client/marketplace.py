@@ -8,8 +8,14 @@ from teardrop.client._core import _parse_list_response
 from teardrop.models import (
     AuthorConfig,
     EarningsEntry,
+    MarketplaceImportPreviewRequest,
+    MarketplaceImportPreviewResponse,
+    MarketplaceImportPublishRequest,
+    MarketplaceImportPublishResponse,
     MarketplaceSubscription,
     MarketplaceTool,
+    MarketplaceToolFeedbackResponse,
+    RunFeedbackRequest,
     WithdrawRequest,
 )
 
@@ -37,6 +43,40 @@ class _MarketplaceMixin:
         self._raise_for_status(resp)
         data = resp.json()
         data["tools"] = _parse_list_response(data, MarketplaceTool, item_container="tools")
+        return data
+
+    async def get_marketplace_catalog_detail(
+        self, org_slug: str, tool_name: str
+    ) -> MarketplaceTool:
+        http = await self._get_http()
+        resp = await http.get(f"{self._base_url}/marketplace/catalog/{org_slug}/{tool_name}")
+        self._raise_for_status(resp)
+        return MarketplaceTool.model_validate(resp.json())
+
+    async def get_marketplace_author_profile(
+        self,
+        org_slug: str,
+        *,
+        sort: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        http = await self._get_http()
+        params: dict[str, Any] = {}
+        if sort is not None:
+            params["sort"] = sort
+        if limit is not None:
+            params["limit"] = limit
+        if cursor is not None:
+            params["cursor"] = cursor
+        resp = await http.get(
+            f"{self._base_url}/marketplace/authors/{org_slug}",
+            params=params,
+        )
+        self._raise_for_status(resp)
+        data = resp.json()
+        if isinstance(data, dict) and "tools" in data:
+            data["tools"] = _parse_list_response(data, MarketplaceTool, item_container="tools")
         return data
 
     async def set_author_config(self, settlement_wallet: str) -> AuthorConfig:
@@ -149,3 +189,39 @@ class _MarketplaceMixin:
             headers=await self._headers(),
         )
         self._raise_for_status(resp)
+
+    async def preview_marketplace_import(
+        self, request: MarketplaceImportPreviewRequest
+    ) -> MarketplaceImportPreviewResponse:
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/marketplace/import/preview",
+            json=request.model_dump(exclude_none=True),
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return MarketplaceImportPreviewResponse.model_validate(resp.json())
+
+    async def publish_marketplace_import(
+        self, request: MarketplaceImportPublishRequest
+    ) -> MarketplaceImportPublishResponse:
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/marketplace/import/publish",
+            json=request.model_dump(exclude_none=True),
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return MarketplaceImportPublishResponse.model_validate(resp.json())
+
+    async def submit_marketplace_tool_feedback(
+        self, org_slug: str, tool_name: str, request: RunFeedbackRequest
+    ) -> MarketplaceToolFeedbackResponse:
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/marketplace/tools/{org_slug}/{tool_name}/feedback",
+            json=request.model_dump(exclude_none=True),
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return MarketplaceToolFeedbackResponse.model_validate(resp.json())

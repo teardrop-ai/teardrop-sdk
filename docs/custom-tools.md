@@ -40,6 +40,24 @@ updated = await client.update_tool(tool.id, UpdateOrgToolRequest(
 await client.delete_tool(tool.id)
 ```
 
+## Testing a Webhook Before Registering
+
+Fire a single diagnostic call against a webhook URL — unbilled, does not
+write to the audit trail, and bypasses the circuit breaker. Useful for
+validating reachability and response shape before calling `create_tool()`.
+
+```python
+from teardrop.models import TestWebhookRequest
+
+result = await client.test_webhook(
+    TestWebhookRequest(
+        webhook_url="https://hooks.example.com/email",
+        payload={"to": "a@example.com", "subject": "hi", "body": "hello"},
+    )
+)
+# → TestWebhookResponse(success=True, status_code=200, latency_ms=..., response_body={...}, error=None)
+```
+
 ---
 
 **Related:** [README](../README.md) · [Marketplace](marketplace.md) · [MCP Servers](mcp-servers.md) · [Agent Runs](agent-runs.md)

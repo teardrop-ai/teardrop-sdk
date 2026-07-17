@@ -11,8 +11,15 @@ from teardrop.exceptions import NotFoundError
 from teardrop.models import (
     AuthorConfig,
     EarningsEntry,
+    MarketplaceImportPreviewRequest,
+    MarketplaceImportPreviewResponse,
+    MarketplaceImportPublishRequest,
+    MarketplaceImportPublishResponse,
+    MarketplaceImportPublishToolRequest,
     MarketplaceSubscription,
     MarketplaceTool,
+    MarketplaceToolFeedbackResponse,
+    RunFeedbackRequest,
     WithdrawRequest,
 )
 
@@ -294,3 +301,221 @@ class TestUnsubscribe:
         mock_http.delete.return_value = _json_response({"detail": "Not found"}, status=404)
         with pytest.raises(NotFoundError):
             await client.unsubscribe("sub-missing")
+
+
+# ─── get_marketplace_catalog_detail ───────────────────────────────────────────
+
+
+class TestGetMarketplaceCatalogDetail:
+    async def test_returns_marketplace_tool(self, client, mock_http):
+        mock_http.get.return_value = _json_response(_TOOL)
+        result = await client.get_marketplace_catalog_detail("acme", "search")
+        assert isinstance(result, MarketplaceTool)
+        assert result.name == "acme/search"
+
+    async def test_calls_expected_url(self, client, mock_http):
+        mock_http.get.return_value = _json_response(_TOOL)
+        await client.get_marketplace_catalog_detail("acme", "search")
+        args, kwargs = mock_http.get.call_args
+        assert args[0] == "http://test/marketplace/catalog/acme/search"
+        assert "headers" not in kwargs
+
+    async def test_404_raises_not_found(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"detail": "Not found"}, status=404)
+        with pytest.raises(NotFoundError):
+            await client.get_marketplace_catalog_detail("acme", "missing")
+
+
+# ─── get_marketplace_author_profile ───────────────────────────────────────────
+
+
+class TestGetMarketplaceAuthorProfile:
+    async def test_parses_tools_list(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {"org_slug": "acme", "display_name": "Acme", "tools": [_TOOL]}
+        )
+        result = await client.get_marketplace_author_profile("acme")
+        assert isinstance(result["tools"][0], MarketplaceTool)
+        assert result["display_name"] == "Acme"
+
+    async def test_params_forwarded(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"tools": []})
+        await client.get_marketplace_author_profile("acme", sort="popularity", limit=10)
+        args, kwargs = mock_http.get.call_args
+        assert args[0] == "http://test/marketplace/authors/acme"
+        assert kwargs["params"] == {"sort": "popularity", "limit": 10}
+
+
+# ─── preview_marketplace_import ───────────────────────────────────────────────
+
+
+class TestPreviewMarketplaceImport:
+    async def test_returns_response_model(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "server_id": "srv-123",
+                "slots_remaining": 5,
+                "can_publish": True,
+                "blockers": [],
+                "tools": [
+                    {
+                        "remote_tool_name": "fetch_webpage",
+                        "proposed_name": "fetch_webpage",
+                        "description": "Download webpage content.",
+                        "marketplace_description": "Download webpage content.",
+                        "input_schema": {},
+                        "output_schema": {},
+                        "schema_status": {"input": "supported", "output": "synthesized"},
+                        "dropped_schema_features": {"input": [], "output": []},
+                        "name_adjusted": False,
+                        "name_collision_resolved": False,
+                        "quota_exceeded": False,
+                        "publishable": True,
+                        "suggested_base_price_usdc": 1000,
+                        "category": "",
+                        "warnings": [
+                            "output_schema was synthesized "
+                            "because the MCP server did not expose one"
+                        ],
+                    }
+                ],
+                "errors": [],
+            }
+        )
+        result = await client.preview_marketplace_import(
+            MarketplaceImportPreviewRequest(server_id="srv-123")
+        )
+        assert isinstance(result, MarketplaceImportPreviewResponse)
+        assert result.server_id == "srv-123"
+        assert result.slots_remaining == 5
+        assert result.tools[0].remote_tool_name == "fetch_webpage"
+
+    async def test_body_sent(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "server_id": "srv-123",
+                "slots_remaining": 5,
+                "can_publish": True,
+                "blockers": [],
+                "tools": [],
+                "errors": [],
+            }
+        )
+        await client.preview_marketplace_import(
+            MarketplaceImportPreviewRequest(server_id="mcp-1", tool_names=["search"])
+        )
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/marketplace/import/preview"
+        assert kwargs["json"] == {"server_id": "mcp-1", "tool_names": ["search"]}
+
+
+# ─── publish_marketplace_import ───────────────────────────────────────────────
+
+
+class TestPublishMarketplaceImport:
+    async def test_returns_response_model(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "server_id": "srv-123",
+                "created": [
+                    {
+                        "remote_tool_name": "fetch_webpage",
+                        "tool": {
+                            "id": "tool-123",
+                            "name": "fetch_webpage",
+                            "org_id": "org-123",
+                            "publish_as_mcp": True,
+                            "mcp_server_id": "srv-123",
+                            "mcp_tool_name": "fetch_webpage",
+                            "base_price_usdc": 1000,
+                        },
+                    }
+                ],
+                "errors": [],
+            }
+        )
+        request = MarketplaceImportPublishRequest(
+            server_id="mcp-1",
+            tools=[
+                MarketplaceImportPublishToolRequest(
+                    remote_tool_name="search",
+                    name="web_search",
+                    description="Search the web",
+                )
+            ],
+        )
+        result = await client.publish_marketplace_import(request)
+        assert isinstance(result, MarketplaceImportPublishResponse)
+        assert result.server_id == "srv-123"
+        assert result.created[0].remote_tool_name == "fetch_webpage"
+        assert result.created[0].tool.id == "tool-123"
+
+    async def test_body_sent(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "server_id": "srv-123",
+                "created": [],
+                "errors": [],
+            }
+        )
+        request = MarketplaceImportPublishRequest(
+            server_id="mcp-1",
+            tools=[
+                MarketplaceImportPublishToolRequest(
+                    remote_tool_name="search",
+                    name="web_search",
+                    description="Search the web",
+                )
+            ],
+        )
+        await client.publish_marketplace_import(request)
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/marketplace/import/publish"
+        assert kwargs["json"]["server_id"] == "mcp-1"
+        assert kwargs["json"]["tools"][0]["remote_tool_name"] == "search"
+
+
+# ─── submit_marketplace_tool_feedback ─────────────────────────────────────────
+
+
+class TestSubmitMarketplaceToolFeedback:
+    async def test_returns_response_model(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "id": "feed-123",
+                "run_id": "run-1",
+                "qualified_tool_name": "acme/search",
+                "rating": 1,
+                "created_at": "2026-07-16T12:00:00.000000",
+            }
+        )
+        result = await client.submit_marketplace_tool_feedback(
+            "acme", "search", RunFeedbackRequest(run_id="run-1", rating=1)
+        )
+        assert isinstance(result, MarketplaceToolFeedbackResponse)
+        assert result.id == "feed-123"
+        assert result.qualified_tool_name == "acme/search"
+
+    async def test_calls_expected_url_and_body(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "id": "feed-123",
+                "run_id": "run-1",
+                "qualified_tool_name": "acme/search",
+                "rating": -1,
+                "created_at": "2026-07-16T12:00:00.000000",
+            }
+        )
+        await client.submit_marketplace_tool_feedback(
+            "acme", "search", RunFeedbackRequest(run_id="run-1", rating=-1, comment="slow")
+        )
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/marketplace/tools/acme/search/feedback"
+        assert kwargs["json"] == {"run_id": "run-1", "rating": -1, "comment": "slow"}
+
+    async def test_404_raises_not_found(self, client, mock_http):
+        mock_http.post.return_value = _json_response({"detail": "Not found"}, status=404)
+        with pytest.raises(NotFoundError):
+            await client.submit_marketplace_tool_feedback(
+                "acme", "search", RunFeedbackRequest(run_id="run-1", rating=1)
+            )

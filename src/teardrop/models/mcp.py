@@ -73,3 +73,21 @@ class DiscoverMcpToolsResponse(BaseModel):
     server_name: str = ""
     tools: list[McpToolDefinition]
     discovered_at: str = ""
+
+
+class TestMcpToolRequest(BaseModel):
+    """Request body for POST /mcp/servers/{server_id}/test-tool."""
+
+    tool_name: str = Field(
+        ..., min_length=1, max_length=128, description="Raw upstream MCP tool name."
+    )
+    args: dict[str, Any] = Field(default_factory=dict, description="Arguments to pass to the tool.")
+
+
+class TestMcpToolResponse(BaseModel):
+    """Diagnostic result of a test MCP tool invocation (always HTTP 200 on proxy success)."""
+
+    success: bool
+    latency_ms: int
+    result: dict[str, Any] | None = None
+    error: str | None = None
