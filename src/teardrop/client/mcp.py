@@ -82,7 +82,7 @@ class _McpMixin:
         if isinstance(request_or_tool_name, TestMcpToolRequest):
             body = request_or_tool_name.model_dump(exclude_none=True)
         else:
-            body = {"tool_name": request_or_tool_name, "arguments": arguments or {}}
+            body = {"tool_name": request_or_tool_name, "args": arguments or {}}
         resp = await http.post(
             f"{self._base_url}/mcp/servers/{server_id}/test-tool",
             json=body,

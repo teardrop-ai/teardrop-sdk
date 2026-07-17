@@ -416,6 +416,20 @@ class TestTestMcpTool:
         assert kwargs["json"] == {"tool_name": "search", "args": {}}
 
     @pytest.mark.asyncio
+    async def test_legacy_signature_uses_args_key(
+        self, client: AsyncTeardropClient, mock_http: AsyncMock
+    ) -> None:
+        mock_http.post = AsyncMock(
+            return_value=_json_response(
+                {"success": False, "latency_ms": 10, "result": None, "error": "timeout"}
+            )
+        )
+        await client.test_mcp_tool("srv-1", "search", {"q": "hello"})
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/mcp/servers/srv-1/test-tool"
+        assert kwargs["json"] == {"tool_name": "search", "args": {"q": "hello"}}
+
+    @pytest.mark.asyncio
     async def test_404_raises_not_found(
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
