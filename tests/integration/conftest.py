@@ -6,6 +6,9 @@ are set.  If any are missing every test in this directory is skipped cleanly.
     TEARDROP_TEST_URL     – base URL of the Teardrop API (e.g. https://api.teardrop.dev)
     TEARDROP_TEST_EMAIL   – email address of the test account
     TEARDROP_TEST_SECRET  – password / secret for the test account
+    TEARDROP_TEST_ADMIN_EMAIL / TEARDROP_TEST_ADMIN_SECRET – optional org-admin
+        credentials for org-admin integration paths
+    TEARDROP_TEST_MCP_URL – optional reachable Streamable HTTP MCP endpoint
 
 In CI, set TEARDROP_TEST_URL as a repository variable and TEARDROP_TEST_EMAIL /
 TEARDROP_TEST_SECRET as encrypted secrets.
@@ -73,5 +76,25 @@ async def async_client(
 ) -> AsyncGenerator[AsyncTeardropClient, None]:  # type: ignore[misc]
     """A real AsyncTeardropClient using the session-cached token."""
     client = AsyncTeardropClient(integration_url, token=_cached_token)
+    yield client
+    await client.close()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def org_admin_client(integration_url: str) -> AsyncGenerator[AsyncTeardropClient, None]:
+    """Use optional org-admin credentials for org-admin-only integration paths."""
+    admin_email = os.getenv("TEARDROP_TEST_ADMIN_EMAIL")
+    admin_secret = os.getenv("TEARDROP_TEST_ADMIN_SECRET")
+    if not admin_email or not admin_secret:
+        pytest.skip(
+            "Org-admin integration test skipped — set TEARDROP_TEST_ADMIN_EMAIL and "
+            "TEARDROP_TEST_ADMIN_SECRET to enable it"
+        )
+
+    client = AsyncTeardropClient(
+        integration_url,
+        email=_strip_quotes(admin_email),
+        secret=_strip_quotes(admin_secret),
+    )
     yield client
     await client.close()

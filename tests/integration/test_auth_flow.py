@@ -201,8 +201,8 @@ class TestSiweNonce:
         """Two consecutive nonce requests must return different one-time values."""
         r1 = await async_client.get_siwe_nonce()
         r2 = await async_client.get_siwe_nonce()
-        nonce1 = r1.get("nonce") or r1.get("data", {}).get("nonce", "")
-        nonce2 = r2.get("nonce") or r2.get("data", {}).get("nonce", "")
+        nonce1 = r1.nonce
+        nonce2 = r2.nonce
         assert nonce1, "First nonce response must contain a nonce"
         assert nonce2, "Second nonce response must contain a nonce"
         assert nonce1 != nonce2, "Each nonce request must return a unique value"

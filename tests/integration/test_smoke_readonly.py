@@ -17,6 +17,11 @@ from teardrop.exceptions import APIError, NotFoundError
 from teardrop.models import (
     BillingBalance,
     BillingPricingResponse,
+    CreditHistoryResponse,
+    MarketplaceCatalogResponse,
+    MarketplaceEarningsResponse,
+    MarketplaceSubscriptionListResponse,
+    MemoryListResponse,
     MeResponse,
     ModelBenchmarksResponse,
     UsageSummary,
@@ -39,8 +44,8 @@ class TestPublicEndpoints:
 
     async def test_get_marketplace_catalog(self, async_client: AsyncTeardropClient) -> None:
         result = await async_client.get_marketplace_catalog()
-        assert isinstance(result, dict)
-        assert "tools" in result
+        assert isinstance(result, MarketplaceCatalogResponse)
+        assert isinstance(result.tools, list)
 
 
 # ─── Tier 2: authenticated read-only endpoints ────────────────────────────────
@@ -100,16 +105,18 @@ class TestAuthenticatedReadOnly:
 
     async def test_list_memories(self, async_client: AsyncTeardropClient) -> None:
         result = await async_client.list_memories(limit=1)
-        assert isinstance(result, list)
+        assert isinstance(result, MemoryListResponse)
+        assert isinstance(result.items, list)
 
     async def test_get_subscriptions(self, async_client: AsyncTeardropClient) -> None:
         result = await async_client.get_subscriptions()
-        assert isinstance(result, list)
+        assert isinstance(result, MarketplaceSubscriptionListResponse)
+        assert isinstance(result.subscriptions, list)
 
     async def test_get_earnings(self, async_client: AsyncTeardropClient) -> None:
         result = await async_client.get_earnings(limit=1)
-        assert isinstance(result, dict)
-        assert "earnings" in result
+        assert isinstance(result, MarketplaceEarningsResponse)
+        assert isinstance(result.earnings, list)
 
     async def test_list_trusted_agents(self, async_client: AsyncTeardropClient) -> None:
         result = await async_client.list_trusted_agents()
@@ -125,4 +132,5 @@ class TestAuthenticatedReadOnly:
 
     async def test_get_credit_history(self, async_client: AsyncTeardropClient) -> None:
         result = await async_client.get_credit_history(limit=1)
-        assert isinstance(result, list)
+        assert isinstance(result, CreditHistoryResponse)
+        assert isinstance(result.items, list)

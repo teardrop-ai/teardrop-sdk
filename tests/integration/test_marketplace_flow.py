@@ -9,23 +9,37 @@ Skipped automatically when integration env vars are not set.
 
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator, List, Optional
+from typing import AsyncGenerator, List, Optional
 
 import pytest
 import pytest_asyncio
 
 from teardrop.client import AsyncTeardropClient
 from teardrop.exceptions import ConflictError, NotFoundError, ValidationError
-from teardrop.models import MarketplaceSubscription, MarketplaceTool
+from teardrop.models import MarketplaceCatalogResponse, MarketplaceSubscription, MarketplaceTool
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
 async def _first_catalog_tool(client: AsyncTeardropClient) -> Optional[MarketplaceTool]:
-    """Return the first tool from the marketplace catalog, or None if empty."""
-    result = await client.get_marketplace_catalog(limit=1)
-    tools: List[MarketplaceTool] = result.get("tools", [])
-    return tools[0] if tools else None
+    """Return the first community tool from the catalog, or None if unavailable."""
+    result = await client.get_marketplace_catalog(limit=100)
+    return next((tool for tool in result.tools if tool.tool_type == "community"), None)
+
+
+async def _existing_subscription(
+    client: AsyncTeardropClient,
+    qualified_tool_name: str,
+) -> Optional[MarketplaceSubscription]:
+    subscriptions = await client.get_subscriptions()
+    return next(
+        (
+            subscription
+            for subscription in subscriptions.subscriptions
+            if subscription.qualified_tool_name == qualified_tool_name
+        ),
+        None,
+    )
 
 
 async def _cleanup_subscriptions(
@@ -57,6 +71,11 @@ async def subscribed_subscription(
     if tool is None:
         pytest.skip("No marketplace tools available to subscribe to")
 
+    existing = await _existing_subscription(async_client, tool.name)
+    if existing is not None:
+        yield existing
+        return
+
     subscription: Optional[MarketplaceSubscription] = None
     try:
         subscription = await async_client.subscribe(tool.name)
@@ -64,7 +83,7 @@ async def subscribed_subscription(
     except ConflictError:
         # Already subscribed — find the existing subscription and yield it
         subs = await async_client.get_subscriptions()
-        existing = next((s for s in subs if s.qualified_tool_name == tool.name), None)
+        existing = next((s for s in subs.subscriptions if s.qualified_tool_name == tool.name), None)
         if existing is None:
             pytest.skip("Already subscribed but could not locate existing subscription")
         yield existing
@@ -83,10 +102,9 @@ class TestMarketplaceCatalog:
     async def test_catalog_returns_tools(self, async_client: AsyncTeardropClient) -> None:
         """Catalog response contains a 'tools' list of MarketplaceTool objects."""
         result = await async_client.get_marketplace_catalog()
-        assert "tools" in result
-        tools: List[Any] = result["tools"]
-        assert isinstance(tools, list)
-        for tool in tools:
+        assert isinstance(result, MarketplaceCatalogResponse)
+        assert isinstance(result.tools, list)
+        for tool in result.tools:
             assert isinstance(tool, MarketplaceTool)
             assert tool.name
             assert tool.description
@@ -98,14 +116,13 @@ class TestMarketplaceCatalog:
             result = await public_client.get_marketplace_catalog()
         finally:
             await public_client.close()
-        assert "tools" in result
-        assert isinstance(result["tools"], list)
+        assert isinstance(result, MarketplaceCatalogResponse)
+        assert isinstance(result.tools, list)
 
     async def test_catalog_platform_filter(self, async_client: AsyncTeardropClient) -> None:
         """Filtering by org_slug='platform' returns only platform tools."""
         result = await async_client.get_marketplace_catalog(org_slug="platform")
-        tools: List[MarketplaceTool] = result.get("tools", [])
-        for tool in tools:
+        for tool in result.tools:
             # Qualified name format is "{org_slug}/{tool_name}"
             assert tool.name.startswith("platform/") or tool.author_slug == "platform", (
                 f"Expected platform tool, got name={tool.name!r} author_slug={tool.author_slug!r}"
@@ -114,19 +131,19 @@ class TestMarketplaceCatalog:
     async def test_catalog_pagination(self, async_client: AsyncTeardropClient) -> None:
         """limit=1 produces a response with next_cursor key present."""
         result = await async_client.get_marketplace_catalog(limit=1)
-        assert "next_cursor" in result, "Paginated catalog response must include 'next_cursor' key"
-        cursor = result["next_cursor"]
+        assert isinstance(result, MarketplaceCatalogResponse)
+        cursor = result.next_cursor
         if cursor is not None:
             # If there's a next page, fetching it must also return tools
             page2 = await async_client.get_marketplace_catalog(limit=1, cursor=cursor)
-            assert "tools" in page2
-            assert isinstance(page2["tools"], list)
+            assert isinstance(page2, MarketplaceCatalogResponse)
+            assert isinstance(page2.tools, list)
 
     async def test_catalog_sort_by_price(self, async_client: AsyncTeardropClient) -> None:
         """sort='price_asc' parameter is accepted without error."""
         result = await async_client.get_marketplace_catalog(sort="price_asc", limit=10)
-        assert "tools" in result
-        assert isinstance(result["tools"], list)
+        assert isinstance(result, MarketplaceCatalogResponse)
+        assert isinstance(result.tools, list)
 
 
 # ─── Subscription tests ───────────────────────────────────────────────────────
@@ -136,8 +153,8 @@ class TestMarketplaceSubscriptions:
     async def test_subscriptions_list_shape(self, async_client: AsyncTeardropClient) -> None:
         """get_subscriptions() returns a list of MarketplaceSubscription objects."""
         subs = await async_client.get_subscriptions()
-        assert isinstance(subs, list)
-        for sub in subs:
+        assert isinstance(subs.subscriptions, list)
+        for sub in subs.subscriptions:
             assert isinstance(sub, MarketplaceSubscription)
             assert sub.id
             assert sub.qualified_tool_name
@@ -147,6 +164,8 @@ class TestMarketplaceSubscriptions:
         tool = await _first_catalog_tool(async_client)
         if tool is None:
             pytest.skip("No marketplace tools available")
+        if await _existing_subscription(async_client, tool.name) is not None:
+            pytest.skip("Test account already subscribed to the selected community tool")
 
         subscription: Optional[MarketplaceSubscription] = None
         try:
@@ -158,7 +177,7 @@ class TestMarketplaceSubscriptions:
 
             # Verify it appears in the subscriptions list
             subs = await async_client.get_subscriptions()
-            ids = [s.id for s in subs]
+            ids = [s.id for s in subs.subscriptions]
             assert subscription.id in ids, (
                 f"Subscription {subscription.id} not found in list after subscribe"
             )
@@ -175,6 +194,8 @@ class TestMarketplaceSubscriptions:
         tool = await _first_catalog_tool(async_client)
         if tool is None:
             pytest.skip("No marketplace tools available")
+        if await _existing_subscription(async_client, tool.name) is not None:
+            pytest.skip("Test account already subscribed to the selected community tool")
 
         subscriptions: List[MarketplaceSubscription] = []
         try:

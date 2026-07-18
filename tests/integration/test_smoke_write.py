@@ -8,6 +8,7 @@ Skipped automatically when integration env vars are not set.
 
 from __future__ import annotations
 
+import os
 import uuid
 
 import pytest
@@ -28,6 +29,9 @@ from teardrop.models import (
     TrustedAgent,
     UpdateMcpServerRequest,
     UpdateOrgToolRequest,
+)
+from teardrop.models import (
+    TestWebhookRequest as WebhookTestRequest,
 )
 from teardrop.models import (
     TestWebhookResponse as WebhookTestResponse,
@@ -77,22 +81,22 @@ class TestAgentWalletRoundTrip:
 
 class TestTrustedAgentRoundTrip:
     async def test_add_list_and_remove_trusted_agent(
-        self, async_client: AsyncTeardropClient
+        self, org_admin_client: AsyncTeardropClient
     ) -> None:
         trusted_agent: TrustedAgent | None = None
         agent_url = f"https://example.com/a2a-smoke-{uuid.uuid4().hex[:8]}"
         try:
-            trusted_agent = await async_client.add_trusted_agent(
+            trusted_agent = await org_admin_client.add_trusted_agent(
                 AddTrustedAgentRequest(agent_url=agent_url, label="integration smoke test")
             )
             assert trusted_agent.id
             assert trusted_agent.agent_url == agent_url
 
-            agents = await async_client.list_trusted_agents()
+            agents = await org_admin_client.list_trusted_agents()
             assert any(agent.id == trusted_agent.id for agent in agents)
         finally:
             if trusted_agent is not None:
-                await async_client.remove_trusted_agent(trusted_agent.id)
+                await org_admin_client.remove_trusted_agent(trusted_agent.id)
 
 
 class TestLlmConfigRoundTrip:
@@ -149,7 +153,12 @@ class TestToolRoundTrip:
             )
             assert updated.description == "Updated integration smoke tool"
 
-            webhook_result = await async_client.test_webhook(tool.id, {"source": "smoke"})
+            webhook_result = await async_client.test_webhook(
+                WebhookTestRequest(
+                    webhook_url="https://example.com/smoke-tool",
+                    payload={"source": "smoke"},
+                )
+            )
             assert isinstance(webhook_result, WebhookTestResponse)
         finally:
             if tool is not None:
@@ -157,7 +166,9 @@ class TestToolRoundTrip:
 
 
 class TestMcpServerRoundTrip:
-    async def test_create_and_delete_mcp_server(self, async_client: AsyncTeardropClient) -> None:
+    async def test_create_update_and_delete_mcp_server(
+        self, async_client: AsyncTeardropClient
+    ) -> None:
         server: OrgMcpServer | None = None
         name = f"smokemcp_{uuid.uuid4().hex[:8]}"
         try:
@@ -179,11 +190,25 @@ class TestMcpServerRoundTrip:
                 UpdateMcpServerRequest(timeout_seconds=20),
             )
             assert updated.timeout_seconds == 20
+        finally:
+            if server is not None:
+                await async_client.delete_mcp_server(server.id)
 
+    async def test_discover_mcp_server_tools(self, async_client: AsyncTeardropClient) -> None:
+        endpoint = os.getenv("TEARDROP_TEST_MCP_URL", "").strip().strip("\"'")
+        if not endpoint:
+            pytest.skip("Set TEARDROP_TEST_MCP_URL to a reachable Streamable HTTP MCP endpoint")
+
+        server: OrgMcpServer | None = None
+        name = f"smokemcp_{uuid.uuid4().hex[:8]}"
+        try:
+            server = await async_client.create_mcp_server(
+                CreateMcpServerRequest(name=name, url=endpoint)
+            )
             try:
                 discovery = await async_client.discover_mcp_server_tools(server.id)
-            except GatewayError:
-                pass
+            except GatewayError as exc:
+                pytest.skip(f"Configured MCP endpoint unavailable: {exc}")
             else:
                 assert isinstance(discovery, DiscoverMcpToolsResponse)
                 assert discovery.server_id == server.id
