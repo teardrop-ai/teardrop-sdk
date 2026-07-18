@@ -9,7 +9,7 @@ Skipped automatically when integration env vars are not set.
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, AsyncGenerator, List, Optional
 
 import pytest
 import pytest_asyncio
@@ -28,13 +28,30 @@ async def _first_catalog_tool(client: AsyncTeardropClient) -> Optional[Marketpla
     return tools[0] if tools else None
 
 
+async def _cleanup_subscriptions(
+    client: AsyncTeardropClient,
+    subscriptions: List[MarketplaceSubscription],
+) -> None:
+    cleanup_errors: List[Exception] = []
+    for subscription in subscriptions:
+        try:
+            await client.unsubscribe(subscription.id)
+        except NotFoundError:
+            pass
+        except Exception as exc:
+            cleanup_errors.append(exc)
+
+    if cleanup_errors:
+        raise cleanup_errors[0]
+
+
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
 
 
 @pytest_asyncio.fixture(scope="function")
 async def subscribed_subscription(
     async_client: AsyncTeardropClient,
-) -> MarketplaceSubscription:
+) -> AsyncGenerator[MarketplaceSubscription, None]:
     """Subscribe to the first catalog tool; clean up after each test."""
     tool = await _first_catalog_tool(async_client)
     if tool is None:
@@ -56,10 +73,7 @@ async def subscribed_subscription(
         pytest.skip("Tool not subscribable (server returned 422)")
     finally:
         if subscription is not None:
-            try:
-                await async_client.unsubscribe(subscription.id)
-            except Exception:
-                pass  # Best-effort cleanup
+            await _cleanup_subscriptions(async_client, [subscription])
 
 
 # ─── Catalog tests ────────────────────────────────────────────────────────────
@@ -154,10 +168,7 @@ class TestMarketplaceSubscriptions:
             pytest.skip(f"Tool not subscribable (server returned 422): {exc}")
         finally:
             if subscription is not None:
-                try:
-                    await async_client.unsubscribe(subscription.id)
-                except Exception:
-                    pass
+                await _cleanup_subscriptions(async_client, [subscription])
 
     async def test_subscribe_same_tool_twice(self, async_client: AsyncTeardropClient) -> None:
         """Subscribing to the same tool twice returns existing sub or raises ConflictError."""
@@ -165,10 +176,11 @@ class TestMarketplaceSubscriptions:
         if tool is None:
             pytest.skip("No marketplace tools available")
 
-        subscription: Optional[MarketplaceSubscription] = None
+        subscriptions: List[MarketplaceSubscription] = []
         try:
             try:
                 subscription = await async_client.subscribe(tool.name)
+                subscriptions.append(subscription)
             except ConflictError:
                 pytest.skip("Test account already subscribed; skipping double-subscribe test")
             except ValidationError:
@@ -179,16 +191,14 @@ class TestMarketplaceSubscriptions:
             # Second subscribe — must either succeed (idempotent) or raise ConflictError
             try:
                 second = await async_client.subscribe(tool.name)
+                if second.id != subscription.id:
+                    subscriptions.append(second)
                 # Idempotent: OK. Verify it points to the same tool.
                 assert second.qualified_tool_name == tool.name
             except ConflictError:
                 pass  # Expected behaviour
         finally:
-            if subscription is not None:
-                try:
-                    await async_client.unsubscribe(subscription.id)
-                except Exception:
-                    pass
+            await _cleanup_subscriptions(async_client, subscriptions)
 
     async def test_unsubscribe_unknown_id_raises(self, async_client: AsyncTeardropClient) -> None:
         """Unsubscribing from a non-existent subscription ID raises NotFoundError."""

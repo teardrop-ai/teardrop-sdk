@@ -170,9 +170,12 @@ class TestRunValidationBoundaries:
     async def test_run_invalid_auth_raises(self, integration_url: str) -> None:
         """A garbage token causes AuthenticationError on the first stream iteration."""
         bad_client = AsyncTeardropClient(integration_url, token="garbage.token.xyz")
-        with pytest.raises(AuthenticationError):
-            async for _ in bad_client.run("hello"):
-                pass  # pragma: no cover
+        try:
+            with pytest.raises(AuthenticationError):
+                async for _ in bad_client.run("hello"):
+                    pass  # pragma: no cover
+        finally:
+            await bad_client.close()
 
 
 class TestRunUsageSummary:
