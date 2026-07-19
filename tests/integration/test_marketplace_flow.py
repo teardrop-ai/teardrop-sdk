@@ -21,10 +21,21 @@ from teardrop.models import MarketplaceCatalogResponse, MarketplaceSubscription,
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
-async def _first_catalog_tool(client: AsyncTeardropClient) -> Optional[MarketplaceTool]:
-    """Return the first community tool from the catalog, or None if unavailable."""
-    result = await client.get_marketplace_catalog(limit=100)
-    return next((tool for tool in result.tools if tool.tool_type == "community"), None)
+async def _first_unsubscribed_community_tool(
+    client: AsyncTeardropClient,
+) -> Optional[MarketplaceTool]:
+    """Return the first community tool the account is not already subscribed to."""
+    catalog = await client.get_marketplace_catalog(limit=100)
+    subscriptions = await client.get_subscriptions()
+    subscribed_names = {s.qualified_tool_name for s in subscriptions.subscriptions}
+    return next(
+        (
+            tool
+            for tool in catalog.tools
+            if tool.tool_type == "community" and tool.name not in subscribed_names
+        ),
+        None,
+    )
 
 
 async def _existing_subscription(
@@ -66,15 +77,10 @@ async def _cleanup_subscriptions(
 async def subscribed_subscription(
     async_client: AsyncTeardropClient,
 ) -> AsyncGenerator[MarketplaceSubscription, None]:
-    """Subscribe to the first catalog tool; clean up after each test."""
-    tool = await _first_catalog_tool(async_client)
+    """Subscribe to the first unsubscribed community tool; clean up after each test."""
+    tool = await _first_unsubscribed_community_tool(async_client)
     if tool is None:
-        pytest.skip("No marketplace tools available to subscribe to")
-
-    existing = await _existing_subscription(async_client, tool.name)
-    if existing is not None:
-        yield existing
-        return
+        pytest.skip("No unsubscribed marketplace tools available")
 
     subscription: Optional[MarketplaceSubscription] = None
     try:
@@ -161,11 +167,9 @@ class TestMarketplaceSubscriptions:
 
     async def test_subscribe_and_unsubscribe(self, async_client: AsyncTeardropClient) -> None:
         """Full subscribe→verify→unsubscribe round-trip for a catalog tool."""
-        tool = await _first_catalog_tool(async_client)
+        tool = await _first_unsubscribed_community_tool(async_client)
         if tool is None:
-            pytest.skip("No marketplace tools available")
-        if await _existing_subscription(async_client, tool.name) is not None:
-            pytest.skip("Test account already subscribed to the selected community tool")
+            pytest.skip("No unsubscribed marketplace tools available")
 
         subscription: Optional[MarketplaceSubscription] = None
         try:
@@ -191,11 +195,9 @@ class TestMarketplaceSubscriptions:
 
     async def test_subscribe_same_tool_twice(self, async_client: AsyncTeardropClient) -> None:
         """Subscribing to the same tool twice returns existing sub or raises ConflictError."""
-        tool = await _first_catalog_tool(async_client)
+        tool = await _first_unsubscribed_community_tool(async_client)
         if tool is None:
-            pytest.skip("No marketplace tools available")
-        if await _existing_subscription(async_client, tool.name) is not None:
-            pytest.skip("Test account already subscribed to the selected community tool")
+            pytest.skip("No unsubscribed marketplace tools available")
 
         subscriptions: List[MarketplaceSubscription] = []
         try:

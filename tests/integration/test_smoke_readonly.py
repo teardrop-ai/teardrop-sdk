@@ -62,10 +62,15 @@ class TestAuthenticatedReadOnly:
     async def test_get_balance(self, async_client: AsyncTeardropClient) -> None:
         result = await async_client.get_balance()
         assert isinstance(result, BillingBalance)
+        assert isinstance(result.balance_usdc, int)
+        assert result.balance_usdc >= 0
 
     async def test_get_usage(self, async_client: AsyncTeardropClient) -> None:
         result = await async_client.get_usage()
         assert isinstance(result, UsageSummary)
+        assert result.total_runs >= 0
+        assert result.total_tokens_in >= 0
+        assert result.total_tokens_out >= 0
 
     async def test_get_org_model_benchmarks(self, async_client: AsyncTeardropClient) -> None:
         result = await async_client.get_org_model_benchmarks()

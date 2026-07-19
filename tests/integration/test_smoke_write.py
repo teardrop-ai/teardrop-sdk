@@ -160,6 +160,9 @@ class TestToolRoundTrip:
                 )
             )
             assert isinstance(webhook_result, WebhookTestResponse)
+            assert isinstance(webhook_result.success, bool)
+            assert webhook_result.status_code is not None
+            assert isinstance(webhook_result.status_code, int)
         finally:
             if tool is not None:
                 await async_client.delete_tool(tool.id)
