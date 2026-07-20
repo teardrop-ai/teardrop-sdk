@@ -56,6 +56,7 @@ class A2ADelegationEvent(BaseModel):
     run_id: str
     agent_url: str
     task_status: str
+    task_type: str
     cost_usdc: int
     billing_method: str
     agent_name: str | None = None
