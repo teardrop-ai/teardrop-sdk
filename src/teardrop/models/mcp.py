@@ -23,6 +23,8 @@ class OrgMcpServer(BaseModel):
     timeout_seconds: int
     created_at: str
     updated_at: str
+    last_schema_changed_at: str | None = None
+    schema_hash: str | None = None
 
     model_config = {"extra": "allow"}
 
@@ -85,6 +87,7 @@ class DiscoverMcpToolsResponse(BaseModel):
     server_id: str
     server_name: str = ""
     tools: list[McpToolDefinition]
+    schema_changed: bool
     discovered_at: str = ""
 
 

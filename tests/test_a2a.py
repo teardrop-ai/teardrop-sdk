@@ -135,6 +135,7 @@ class TestGetDelegations:
                     "run_id": "run-1",
                     "agent_url": "https://agent.example.com",
                     "task_status": "pending",
+                    "task_type": "research",
                     "cost_usdc": 100,
                     "billing_method": "credit",
                 },
@@ -143,6 +144,7 @@ class TestGetDelegations:
                     "run_id": "run-2",
                     "agent_url": "https://agent2.example.com",
                     "task_status": "completed",
+                    "task_type": "execution",
                     "cost_usdc": 200,
                     "billing_method": "x402",
                 },
@@ -153,6 +155,7 @@ class TestGetDelegations:
         assert isinstance(result[0], A2ADelegationEvent)
         assert result[0].id == "d-1"
         assert result[0].run_id == "run-1"
+        assert result[0].task_type == "research"
 
     async def test_limit_param_forwarded(self, client, mock_http):
         mock_http.get.return_value = _json_response([])

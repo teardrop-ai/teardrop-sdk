@@ -21,6 +21,9 @@ await client.remove_trusted_agent(agent.id)
 delegations = await client.get_delegations(limit=20)
 ```
 
+Delegation records expose the backend task classification as
+`event.task_type`, alongside `run_id`, `task_status`, and billing details.
+
 ---
 
 **Related:** [README](../README.md) · [Agent Card](agent-card.md) · [Agent Runs](agent-runs.md)

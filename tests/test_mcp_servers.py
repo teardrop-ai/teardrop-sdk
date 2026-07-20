@@ -53,6 +53,8 @@ _SERVER: dict = {
     "timeout_seconds": 15,
     "created_at": "2026-01-01T00:00:00Z",
     "updated_at": "2026-01-01T00:00:00Z",
+    "last_schema_changed_at": "2026-01-02T00:00:00Z",
+    "schema_hash": "sha256:abc123",
 }
 
 
@@ -82,6 +84,8 @@ class TestCreateMcpServer:
         assert isinstance(result, McpServerResponse)
         assert result.name == "my_server"
         assert result.has_auth is False
+        assert result.last_schema_changed_at == "2026-01-02T00:00:00Z"
+        assert result.schema_hash == "sha256:abc123"
 
     @pytest.mark.asyncio
     async def test_create_with_bearer_auth(
@@ -325,6 +329,7 @@ class TestDiscoverMcpServerTools:
     ) -> None:
         body = {
             "server_id": "srv-1",
+            "schema_changed": True,
             "tools": [
                 {
                     "name": "add",
@@ -337,6 +342,7 @@ class TestDiscoverMcpServerTools:
         result = await client.discover_mcp_server_tools("srv-1")
         assert isinstance(result, DiscoverMcpToolsResponse)
         assert result.server_id == "srv-1"
+        assert result.schema_changed is True
         assert len(result.tools) == 1
         assert result.tools[0].name == "add"
 
@@ -373,7 +379,7 @@ class TestDiscoverMcpServerTools:
     async def test_discover_posts_to_discover_endpoint(
         self, client: AsyncTeardropClient, mock_http: AsyncMock
     ) -> None:
-        body = {"server_id": "srv-1", "tools": []}
+        body = {"server_id": "srv-1", "schema_changed": False, "tools": []}
         mock_http.post = AsyncMock(return_value=_json_response(body))
         await client.discover_mcp_server_tools("srv-1")
         url_called = mock_http.post.call_args.args[0]

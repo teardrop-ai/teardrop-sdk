@@ -30,9 +30,16 @@ await client.update_mcp_server(server.id, UpdateMcpServerRequest(
 discovery = await client.discover_mcp_server_tools(server.id)
 for tool in discovery.tools:
     print(tool.name, tool.description)
+# True when the discovered inventory differs from the previous snapshot.
+print(discovery.schema_changed)
 
 await client.delete_mcp_server(server.id)
 ```
+
+Server responses may include `schema_hash` and
+`last_schema_changed_at` for tracking the cached tool inventory. Both values
+are nullable; `/discover` reports whether the inventory changed in
+`schema_changed`.
 
 ## Testing a Tool Before Publishing
 
