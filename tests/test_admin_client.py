@@ -39,6 +39,8 @@ from teardrop.models import (
     SettlementRetryResponse,
     SpendingConfigUpdate,
     SweepStatusResponse,
+    TelemetryCompletenessBySource,
+    TelemetryCompletenessResponse,
     ToolPricingDeleteResponse,
     ToolPricingOverrideRequest,
     ToolPricingOverrideResponse,
@@ -90,7 +92,7 @@ def test_admin_surface_covers_every_spec_operation():
         for name in dir(_AdminMixin)
         if name.startswith("admin_") and callable(getattr(_AdminMixin, name))
     }
-    assert spec_operation_count == 28
+    assert spec_operation_count == 29
     assert len(implemented_methods) == spec_operation_count
 
 
@@ -551,3 +553,35 @@ class TestAdminUsage:
         assert isinstance(result, UsageSummary)
         args, _ = mock_http.get.call_args
         assert args[0] == "http://test/admin/usage/user-1"
+
+
+# ── Admin Telemetry ──────────────────────────────────────────────────────────
+
+
+class TestAdminTelemetry:
+    async def test_admin_get_telemetry_completeness(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "window_days": 7,
+                "sources": [
+                    {
+                        "source": "api",
+                        "decision_coverage": 0.9,
+                        "outcome_label_coverage": 0.8,
+                        "tool_eligible_runs": 10,
+                        "tool_event_coverage": 0.7,
+                        "total_runs": 20,
+                        "usage_event_coverage": 1.0,
+                    }
+                ],
+            }
+        )
+        result = await client.admin_get_telemetry_completeness(days=14)
+        assert isinstance(result, TelemetryCompletenessResponse)
+        assert result.window_days == 7
+        assert len(result.sources) == 1
+        assert isinstance(result.sources[0], TelemetryCompletenessBySource)
+        assert result.sources[0].source == "api"
+        args, kwargs = mock_http.get.call_args
+        assert args[0] == "http://test/admin/telemetry/completeness"
+        assert kwargs["params"] == {"days": 14}

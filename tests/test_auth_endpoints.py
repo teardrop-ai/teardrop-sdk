@@ -107,6 +107,25 @@ class TestRegister:
         body = kwargs["json"]
         assert body == {"org_name": "Acme", "email": "u@acme.com", "password": "s3cr3t"}
 
+    async def test_acquisition_source_sent_when_provided(self, client, mock_http):
+        mock_http.post.return_value = _json_response(_token_response_dict())
+        await client.register(
+            org_name="Acme",
+            email="u@acme.com",
+            password="s3cr3t",
+            acquisition_source="github",
+        )
+        _, kwargs = mock_http.post.call_args
+        body = kwargs["json"]
+        assert body["acquisition_source"] == "github"
+
+    async def test_acquisition_source_omitted_when_none(self, client, mock_http):
+        mock_http.post.return_value = _json_response(_token_response_dict())
+        await client.register(org_name="Acme", email="u@acme.com", password="s3cr3t")
+        _, kwargs = mock_http.post.call_args
+        body = kwargs["json"]
+        assert "acquisition_source" not in body
+
     async def test_409_raises_conflict(self, client, mock_http):
         mock_http.post.return_value = _json_response({"detail": "Org already exists"}, status=409)
         with pytest.raises(ConflictError):
@@ -132,6 +151,18 @@ class TestRegisterInvite:
         )
         assert client._token_manager._token == result.access_token
         assert client._token_manager._refresh_token == "rt-abc"
+
+    async def test_acquisition_source_sent_when_provided(self, client, mock_http):
+        mock_http.post.return_value = _json_response(_token_response_dict())
+        await client.register_invite(
+            token="invite-tok",
+            email="u@acme.com",
+            password="s3cr3t",
+            acquisition_source="referral",
+        )
+        _, kwargs = mock_http.post.call_args
+        body = kwargs["json"]
+        assert body["acquisition_source"] == "referral"
 
     async def test_422_raises_validation_error(self, client, mock_http):
         mock_http.post.return_value = _json_response({"detail": "Invalid token"}, status=422)

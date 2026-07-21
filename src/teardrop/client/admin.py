@@ -23,6 +23,7 @@ from teardrop.models import (
     RevenueSummaryResponse,
     SettlementRetryResponse,
     SpendingConfigUpdate,
+    TelemetryCompletenessResponse,
     ToolPricingDeleteResponse,
     ToolPricingOverrideRequest,
     ToolPricingOverrideResponse,
@@ -390,3 +391,19 @@ class _AdminMixin:
         )
         self._raise_for_status(resp)
         return UsageSummary.model_validate(resp.json())
+
+    # ── Admin Telemetry ───────────────────────────────────────────────────────
+
+    async def admin_get_telemetry_completeness(
+        self,
+        *,
+        days: int = 7,
+    ) -> TelemetryCompletenessResponse:
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/admin/telemetry/completeness",
+            headers=await self._headers(),
+            params={"days": days},
+        )
+        self._raise_for_status(resp)
+        return TelemetryCompletenessResponse.model_validate(resp.json())

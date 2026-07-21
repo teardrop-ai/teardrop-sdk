@@ -202,6 +202,10 @@ from teardrop.models.scheduling import (
     UpdateEventTriggerRequest,
     UpdateScheduleRequest,
 )
+from teardrop.models.telemetry import (
+    TelemetryCompletenessBySource,
+    TelemetryCompletenessResponse,
+)
 from teardrop.models.tools import (
     CreateCustomToolRequest,
     CreateOrgToolRequest,
@@ -389,6 +393,8 @@ __all__ = [
     "StripeTopupStatusResponse",
     "SweepStatusItem",
     "SweepStatusResponse",
+    "TelemetryCompletenessBySource",
+    "TelemetryCompletenessResponse",
     "TestMcpToolRequest",
     "TestMcpToolResponse",
     "TestWebhookRequest",
