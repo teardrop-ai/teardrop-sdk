@@ -182,6 +182,8 @@ from teardrop.models import (  # noqa: F401  # noqa: F401
     StripeTopupStatusResponse,
     SweepStatusItem,
     SweepStatusResponse,
+    TelemetryCompletenessBySource,
+    TelemetryCompletenessResponse,
     TestMcpToolRequest,
     TestMcpToolResponse,
     TestWebhookRequest,

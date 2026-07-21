@@ -34,6 +34,7 @@ from teardrop.models import (
     SettlementRetryResponse,
     SpendingConfigUpdate,
     SweepStatusResponse,
+    TelemetryCompletenessResponse,
     ToolPricingDeleteResponse,
     ToolPricingOverrideRequest,
     ToolPricingOverrideResponse,
@@ -212,3 +213,8 @@ class AdminTeardropClient:
         end: str | None = None,
     ) -> UsageSummary:
         return self._run(self._async.admin_get_usage_user(user_id, start=start, end=end))
+
+    # ── Admin Telemetry ───────────────────────────────────────────────────────
+
+    def admin_get_telemetry_completeness(self, *, days: int = 7) -> TelemetryCompletenessResponse:
+        return self._run(self._async.admin_get_telemetry_completeness(days=days))

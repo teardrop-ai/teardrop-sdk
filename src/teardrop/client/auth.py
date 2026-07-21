@@ -31,11 +31,21 @@ class _AuthMixin:
         self._raise_for_status(resp)
         return AuthMeResponse.model_validate(resp.json())
 
-    async def register(self, *, org_name: str, email: str, password: str) -> TokenResponse:
+    async def register(
+        self,
+        *,
+        org_name: str,
+        email: str,
+        password: str,
+        acquisition_source: str | None = None,
+    ) -> TokenResponse:
         http = await self._get_http()
+        body: dict[str, str] = {"org_name": org_name, "email": email, "password": password}
+        if acquisition_source is not None:
+            body["acquisition_source"] = acquisition_source
         resp = await http.post(
             f"{self._base_url}/register",
-            json={"org_name": org_name, "email": email, "password": password},
+            json=body,
         )
         self._raise_for_status(resp)
         data = TokenResponse.model_validate(resp.json())
@@ -44,11 +54,21 @@ class _AuthMixin:
         self._token_manager._expires_at = self._token_manager._read_exp(data.access_token)
         return data
 
-    async def register_invite(self, *, token: str, email: str, password: str) -> TokenResponse:
+    async def register_invite(
+        self,
+        *,
+        token: str,
+        email: str,
+        password: str,
+        acquisition_source: str | None = None,
+    ) -> TokenResponse:
         http = await self._get_http()
+        body: dict[str, str] = {"token": token, "email": email, "password": password}
+        if acquisition_source is not None:
+            body["acquisition_source"] = acquisition_source
         resp = await http.post(
             f"{self._base_url}/register/invite",
-            json={"token": token, "email": email, "password": password},
+            json=body,
         )
         self._raise_for_status(resp)
         data = TokenResponse.model_validate(resp.json())

@@ -34,6 +34,7 @@ from teardrop.models import (
     SettlementRetryResponse,
     SpendingConfigUpdate,
     SweepStatusResponse,
+    TelemetryCompletenessResponse,
     ToolPricingDeleteResponse,
     ToolPricingOverrideRequest,
     ToolPricingOverrideResponse,
@@ -427,3 +428,16 @@ class TestAdminSyncDelegation:
             ) as mock:
                 assert admin.admin_get_usage_user("user-1") == result
                 mock.assert_awaited_once_with("user-1", start=None, end=None)
+
+    # ── Telemetry ─────────────────────────────────────────────────────────────
+
+    def test_admin_get_telemetry_completeness(self):
+        result = TelemetryCompletenessResponse(window_days=7, sources=[])
+        with AdminTeardropClient("http://test", token="tok.en.sig") as admin:
+            with patch.object(
+                admin._async,
+                "admin_get_telemetry_completeness",
+                new=AsyncMock(return_value=result),
+            ) as mock:
+                assert admin.admin_get_telemetry_completeness(days=30) == result
+                mock.assert_awaited_once_with(days=30)
