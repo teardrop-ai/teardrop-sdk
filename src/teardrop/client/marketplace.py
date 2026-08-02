@@ -22,6 +22,7 @@ from teardrop.models import (
     MarketplaceSubscriptionResponse,
     MarketplaceWithdrawalResponse,
     MarketplaceWithdrawalsListResponse,
+    PublicReputationResponse,
     RunFeedbackRequest,
     RunFeedbackResponse,
     UnsubscribeResponse,
@@ -62,6 +63,16 @@ class _MarketplaceMixin:
         )
         self._raise_for_status(resp)
         return MarketplaceCatalogDetailResponse.model_validate(resp.json())
+
+    async def get_public_reputation(self) -> PublicReputationResponse:
+        """Fetch public aggregate quality metrics for active marketplace tools.
+
+        Hits the unauthenticated ``/.well-known/reputation.json`` endpoint.
+        """
+        http = await self._get_http()
+        resp = await http.get(f"{self._base_url}/.well-known/reputation.json")
+        self._raise_for_status(resp)
+        return PublicReputationResponse.model_validate(resp.json())
 
     async def set_author_config(self, settlement_wallet: str) -> MarketplaceAuthorConfigResponse:
         http = await self._get_http()

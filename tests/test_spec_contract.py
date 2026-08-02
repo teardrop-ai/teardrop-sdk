@@ -22,12 +22,13 @@ EXCLUDED_EXACT_PATHS = {
     "/token",
 }
 AGENT_CARD_PATH = "/.well-known/agent-card.json"
+REPUTATION_PATH = "/.well-known/reputation.json"
 HTTP_METHODS = {"get": "GET", "post": "POST", "put": "PUT", "patch": "PATCH", "delete": "DELETE"}
 
 
 def _is_excluded_path(path: str) -> bool:
     return path in EXCLUDED_EXACT_PATHS or (
-        path.startswith("/.well-known/") and path != AGENT_CARD_PATH
+        path.startswith("/.well-known/") and path not in (AGENT_CARD_PATH, REPUTATION_PATH)
     )
 
 
@@ -130,6 +131,7 @@ def test_server_only_openapi_paths_are_explicitly_excluded() -> None:
     excluded = {path for path in spec["paths"] if _is_excluded_path(path)}
     assert EXCLUDED_EXACT_PATHS <= excluded
     assert AGENT_CARD_PATH not in excluded
+    assert REPUTATION_PATH not in excluded
     assert all(path.startswith("/.well-known/") for path in excluded - EXCLUDED_EXACT_PATHS)
 
 
