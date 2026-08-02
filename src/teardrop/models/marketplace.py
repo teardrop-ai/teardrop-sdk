@@ -45,12 +45,36 @@ class MarketplaceToolSummary(BaseModel):
     category: str
     total_calls: int
     reputation_score: float
+    success_rate: float
+    unique_caller_count: int | None = None
     health_status: str
     is_healthy: bool
     author: str
     author_slug: str
 
     model_config = {"extra": "allow"}
+
+
+class PublicToolReputation(BaseModel):
+    """Per-tool public aggregate quality metrics from /.well-known/reputation.json."""
+
+    qualified_tool_name: str
+    reputation_score: float
+    success_rate: float
+    sample_size: float
+    confidence: float
+    freshness: float
+    average_latency_ms: float
+    unique_caller_count: int | None = None
+
+
+class PublicReputationResponse(BaseModel):
+    """Response from GET /.well-known/reputation.json."""
+
+    schema_version: str
+    generated_at: str | None
+    methodology_url: str
+    tools: list[PublicToolReputation]
 
 
 class AuthorConfig(BaseModel):

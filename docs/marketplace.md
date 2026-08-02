@@ -60,6 +60,27 @@ await client.unsubscribe(sub.id)
 
 **Integration in Agent Runs**: After subscribing to a marketplace tool, the agent automatically discovers and can call it during `client.run()` without any additional configuration. See [Using Marketplace Tools in Agent Runs](#using-marketplace-tools-in-agent-runs) below.
 
+## Public Reputation
+
+The platform exposes public aggregate quality metrics for active marketplace tools at `/.well-known/reputation.json`. This endpoint is **unauthenticated** and requires no token.
+
+```python
+reputation = await client.get_public_reputation()
+# → PublicReputationResponse
+
+print(reputation.schema_version)   # e.g. "1.0"
+print(reputation.generated_at)     # ISO timestamp or None
+print(reputation.methodology_url)  # link to the scoring methodology
+
+for tool in reputation.tools:
+    print(tool.qualified_tool_name)
+    print(f"  score={tool.reputation_score} success={tool.success_rate}")
+    print(f"  sample={tool.sample_size} confidence={tool.confidence}")
+    print(f"  freshness={tool.freshness} latency_ms={tool.average_latency_ms}")
+```
+
+Each `PublicToolReputation` entry carries `qualified_tool_name`, `reputation_score`, `success_rate`, `sample_size`, `confidence`, `freshness`, `average_latency_ms`, and an optional `unique_caller_count`. The synchronous client exposes the same method as `client.get_public_reputation()`.
+
 ## Publishing & Earnings
 
 ### Author Setup

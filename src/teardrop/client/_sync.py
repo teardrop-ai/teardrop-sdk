@@ -55,6 +55,7 @@ from teardrop.models import (
     ModelBenchmarksResponse,
     OrgCredentialItem,
     OrgToolResponse,
+    PublicReputationResponse,
     RegenerateCredentialsResponse,
     ResendVerificationResponse,
     RunFeedbackResponse,
@@ -322,6 +323,9 @@ class TeardropClient:
         self, org_slug: str, tool_name: str
     ) -> MarketplaceCatalogDetailResponse:
         return self._run(self._async.get_marketplace_catalog_detail(org_slug, tool_name))
+
+    def get_public_reputation(self) -> PublicReputationResponse:
+        return self._run(self._async.get_public_reputation())
 
     def set_author_config(self, settlement_wallet: str) -> MarketplaceAuthorConfigResponse:
         return self._run(self._async.set_author_config(settlement_wallet))

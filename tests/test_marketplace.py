@@ -97,6 +97,7 @@ _SUMMARY = {
     "category": "search",
     "total_calls": 12,
     "reputation_score": 0.9,
+    "success_rate": 0.95,
     "health_status": "healthy",
     "is_healthy": True,
     "author": "Acme",
@@ -205,6 +206,55 @@ class TestMarketplaceDiscovery:
         result = await client.get_author_profile("acme")
         assert isinstance(result, MarketplaceAuthorProfileResponse)
         assert result.tools[0].name == "search"
+
+
+# ─── get_public_reputation ───────────────────────────────────────────────────
+
+
+class TestGetPublicReputation:
+    async def test_returns_parsed_reputation(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "schema_version": "1.0",
+                "generated_at": "2026-01-01T00:00:00Z",
+                "methodology_url": "https://example.com/methodology",
+                "tools": [
+                    {
+                        "qualified_tool_name": "acme/search",
+                        "reputation_score": 0.9,
+                        "success_rate": 0.95,
+                        "sample_size": 100,
+                        "confidence": 0.8,
+                        "freshness": 0.7,
+                        "average_latency_ms": 250.0,
+                        "unique_caller_count": 5,
+                    }
+                ],
+            }
+        )
+        result = await client.get_public_reputation()
+        assert result.schema_version == "1.0"
+        assert result.tools[0].qualified_tool_name == "acme/search"
+        assert result.tools[0].success_rate == 0.95
+
+    async def test_correct_url_and_no_auth_header(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "schema_version": "1.0",
+                "generated_at": None,
+                "methodology_url": "https://example.com/methodology",
+                "tools": [],
+            }
+        )
+        await client.get_public_reputation()
+        args, kwargs = mock_http.get.call_args
+        assert args[0].endswith("/.well-known/reputation.json")
+        assert "headers" not in kwargs
+
+    async def test_404_raises_not_found(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"detail": "Not found"}, status=404)
+        with pytest.raises(NotFoundError):
+            await client.get_public_reputation()
 
 
 # ─── get_marketplace_balance ─────────────────────────────────────────────────
