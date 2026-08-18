@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from teardrop.exceptions import NotFoundError
 from teardrop.models import (
     CreateEventTriggerRequest,
+    EventTaskResponse,
     EventTrigger,
     EventTriggerListResponse,
     EventTriggerWithSecret,
@@ -172,6 +173,30 @@ class TestEventTriggersRotateSecret:
         assert isinstance(result, RotateSecretResponse)
         assert result.id == _TRIGGER["id"]
         assert result.secret == "rotated_secret_value"
+
+
+class TestEventTriggersGetRun:
+    async def test_returns_event_task_response(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "id": "task-1",
+                "contextId": "ctx-1",
+                "status": {"state": "TASK_STATE_COMPLETED", "timestamp": "2026-06-28T12:00:00Z"},
+                "artifacts": [
+                    {
+                        "artifactId": "art-1",
+                        "name": "result",
+                        "parts": [{"text": "ok"}],
+                    }
+                ],
+            }
+        )
+
+        result = await client.event_triggers.get_run(_TRIGGER["id"], "run-1")
+
+        assert isinstance(result, EventTaskResponse)
+        assert result.id == "task-1"
+        assert result.status.state == "TASK_STATE_COMPLETED"
 
 
 class TestEventTriggersRuns:

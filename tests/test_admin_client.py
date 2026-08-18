@@ -327,6 +327,7 @@ class TestAdminMarketplace:
                         "created_at": "2026-07-17T00:00:00Z",
                     }
                 ],
+                "in_flight": [],
                 "exhausted": [],
             }
         )
@@ -518,6 +519,7 @@ class TestAdminTools:
                     "marketplace_description": "",
                     "base_price_usdc": 0,
                     "category": "",
+                    "tags": [],
                     "created_at": "2026-07-17T00:00:00Z",
                     "updated_at": "2026-07-17T00:00:00Z",
                 }

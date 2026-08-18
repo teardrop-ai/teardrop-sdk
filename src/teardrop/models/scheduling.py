@@ -28,6 +28,7 @@ class ScheduledRun(BaseModel):
     interval_seconds: int
     enabled: bool
     callback_url: str | None = None
+    callback_format: Literal["json", "text"] | None = None
     next_run_at: str | None
     last_run_at: str | None = None
     consecutive_failures: int
@@ -81,11 +82,16 @@ class CreateScheduleRequest(BaseModel):
     prompt: str
     interval_seconds: int = Field(ge=1)
     callback_url: str | None = None
+    callback_format: Literal["json", "text"] | None = None
+    first_run_at: str | None = None
 
     @field_validator("callback_url")
     @classmethod
     def _validate_callback_url(cls, value: str | None) -> str | None:
         return _validate_https_callback_url(value)
+
+
+CreateScheduledRunRequest = CreateScheduleRequest
 
 
 class UpdateScheduleRequest(BaseModel):
@@ -94,11 +100,15 @@ class UpdateScheduleRequest(BaseModel):
     interval_seconds: int | None = Field(default=None, ge=1)
     enabled: bool | None = None
     callback_url: str | None = None
+    callback_format: Literal["json", "text"] | None = None
 
     @field_validator("callback_url")
     @classmethod
     def _validate_callback_url(cls, value: str | None) -> str | None:
         return _validate_https_callback_url(value)
+
+
+UpdateScheduledRunRequest = UpdateScheduleRequest
 
 
 class EventTrigger(BaseModel):
@@ -159,6 +169,41 @@ class UpdateEventTriggerRequest(BaseModel):
     @classmethod
     def _validate_callback_url(cls, value: str | None) -> str | None:
         return _validate_https_callback_url(value)
+
+
+class EventTaskArtifactPart(BaseModel):
+    text: str
+
+
+class EventTaskArtifact(BaseModel):
+    artifactId: str
+    name: str
+    parts: list[EventTaskArtifactPart]
+
+
+class EventTaskStatus(BaseModel):
+    state: Literal[
+        "TASK_STATE_SUBMITTED", "TASK_STATE_COMPLETED", "TASK_STATE_FAILED", "TASK_STATE_REJECTED"
+    ]
+    timestamp: str
+
+
+class EventTaskResponse(BaseModel):
+    id: str
+    contextId: str
+    status: EventTaskStatus
+    artifacts: list[EventTaskArtifact] | None = None
+    metadata: dict[str, str] | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class ScheduleRunNowResponse(BaseModel):
+    schedule_id: str
+    status: Literal["queued"]
+    next_run_at: str
+
+    model_config = {"extra": "allow"}
 
 
 class ScheduleDeletedResponse(BaseModel):

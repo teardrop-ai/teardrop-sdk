@@ -13,6 +13,7 @@ from teardrop.models import (
     ScheduledRunListResponse,
     ScheduledRunResult,
     ScheduledRunsPage,
+    ScheduleRunNowResponse,
     UpdateScheduleRequest,
 )
 
@@ -91,6 +92,21 @@ class TestSchedulesCreate:
 
 
 class TestScheduleRequestValidation:
+    def test_create_supports_callback_format_and_first_run_at(self):
+        request = CreateScheduleRequest(
+            name="Daily Summary",
+            prompt="Summarize portfolio balances",
+            interval_seconds=86400,
+            callback_format="json",
+            first_run_at="2026-06-29T12:00:00Z",
+        )
+
+        assert request.model_dump(exclude_none=True)["callback_format"] == "json"
+        assert request.model_dump(exclude_none=True)["first_run_at"] == "2026-06-29T12:00:00Z"
+
+    def test_update_excludes_create_only_first_run_at(self):
+        assert "first_run_at" not in UpdateScheduleRequest.model_fields
+
     def test_create_rejects_non_https_callback_url(self):
         with pytest.raises(ValidationError):
             CreateScheduleRequest(
@@ -172,6 +188,23 @@ class TestSchedulesDelete:
 
         assert isinstance(result, ScheduleDeletedResponse)
         assert result.id == _SCHEDULE["id"]
+
+
+class TestSchedulesRunNow:
+    async def test_run_now_returns_queued_response(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "schedule_id": _SCHEDULE["id"],
+                "status": "queued",
+                "next_run_at": "2026-06-29T12:00:00Z",
+            }
+        )
+
+        result = await client.schedules.run_now(_SCHEDULE["id"])
+
+        assert isinstance(result, ScheduleRunNowResponse)
+        assert result.status == "queued"
+        assert result.schedule_id == _SCHEDULE["id"]
 
 
 class TestSchedulesRuns:

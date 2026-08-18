@@ -18,7 +18,10 @@ Use this table to find which model backs which client method.
 | `UsageSummary` | `get_usage()` |
 | `OrgLlmConfig`, `SetLlmConfigRequest`, `ProviderType`, `RoutingPreference` | LLM config CRUD |
 | `CreateScheduleRequest`, `ScheduledRun`, `ScheduledRunResult`, `ScheduledRunsPage`, `UpdateScheduleRequest` | `client.schedules.*` |
+| `ScheduleRunNowResponse` | `client.schedules.run_now()` |
 | `CreateEventTriggerRequest`, `EventTrigger`, `EventTriggerWithSecret`, `UpdateEventTriggerRequest` | `client.event_triggers.*` |
+| `EventTaskResponse` | `client.event_triggers.get_run()` |
+| `LabelingBindingRequest`, `LabelingBindingResponse`, `LabelingDefinitionListResponse`, `LabelingPredictionListResponse`, `LabelingResultListResponse`, `LabelingOverrideResponse`, `ScoreResult` | `client.labeling.*` |
 | `ModelBenchmarksResponse`, `ModelInfo`, `ModelPricing`, `ModelRunBenchmarks` | `get_model_benchmarks()`, `get_org_model_benchmarks()` |
 | `Wallet`, `LinkWalletRequest` | `get_wallets()`, `link_wallet()` |
 | `AgentCard` | `get_agent_card()` |

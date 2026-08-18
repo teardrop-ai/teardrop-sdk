@@ -13,10 +13,13 @@ from teardrop.models import (
     BillingBalance,
     CreateEventTriggerRequest,
     CreateScheduleRequest,
+    EventTaskResponse,
     EventTriggerWithSecret,
+    LabelingDefinitionListResponse,
     ScheduledRun,
     ScheduledRunResult,
     ScheduledRunsPage,
+    ScheduleRunNowResponse,
     SSEEvent,
     UsageSummary,
 )
@@ -368,6 +371,50 @@ class TestSyncDelegation:
                 )
 
         assert result.secret == "secret-1"
+
+    def test_new_schedule_and_event_methods_delegate(self):
+        run_now = ScheduleRunNowResponse(
+            schedule_id="sched-1",
+            status="queued",
+            next_run_at="2026-01-01T00:00:00Z",
+        )
+        event_task = EventTaskResponse(
+            id="task-1",
+            contextId="ctx-1",
+            status={"state": "TASK_STATE_COMPLETED", "timestamp": "2026-01-01T00:00:00Z"},
+        )
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with (
+                patch.object(
+                    client._async.schedules,
+                    "run_now",
+                    new=AsyncMock(return_value=run_now),
+                ) as run_now_mock,
+                patch.object(
+                    client._async.event_triggers,
+                    "get_run",
+                    new=AsyncMock(return_value=event_task),
+                ) as get_run_mock,
+            ):
+                assert client.schedules.run_now("sched-1") == run_now
+                assert client.event_triggers.get_run("evt-1", "run-1") == event_task
+
+        run_now_mock.assert_awaited_once_with("sched-1")
+        get_run_mock.assert_awaited_once_with("evt-1", "run-1")
+
+    def test_labeling_namespace_delegates(self):
+        definitions = LabelingDefinitionListResponse(items=[])
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with patch.object(
+                client._async.labeling,
+                "get_definitions",
+                new=AsyncMock(return_value=definitions),
+            ) as get_definitions_mock:
+                assert client.labeling.get_definitions() == definitions
+
+        get_definitions_mock.assert_awaited_once_with()
 
     def test_schedules_runs_iter_auto_paginates(self):
         page_1 = ScheduledRunsPage(

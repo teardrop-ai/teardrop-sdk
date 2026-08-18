@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 from teardrop.client._core import _parse_scheduled_runs_page, _quote_path_segment
 from teardrop.models import (
     CreateEventTriggerRequest,
+    EventTaskResponse,
     EventTrigger,
     EventTriggerCreatedResponse,
     EventTriggerListResponse,
@@ -82,6 +83,15 @@ class EventTriggersModule:
         self._c._raise_for_status(resp)
         return RotateSecretResponse.model_validate(resp.json())
 
+    async def get_run(self, trigger_id: str, run_id: str) -> EventTaskResponse:
+        http = await self._c._get_http()
+        resp = await http.get(
+            f"{self._c._base_url}/agent/event-triggers/{_quote_path_segment(trigger_id)}/runs/{_quote_path_segment(run_id)}",
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        return EventTaskResponse.model_validate(resp.json())
+
     async def runs(
         self,
         trigger_id: str,
@@ -141,6 +151,9 @@ class _SyncEventTriggersModule:
 
     def rotate_secret(self, trigger_id: str) -> RotateSecretResponse:
         return self._c._run(self._c._async.event_triggers.rotate_secret(trigger_id))
+
+    def get_run(self, trigger_id: str, run_id: str) -> EventTaskResponse:
+        return self._c._run(self._c._async.event_triggers.get_run(trigger_id, run_id))
 
     def runs(
         self,

@@ -256,7 +256,7 @@ class TestAdminSyncDelegation:
                 mock.assert_awaited_once_with("wd-1")
 
     def test_admin_get_sweep_status(self):
-        result = SweepStatusResponse(pending=[], exhausted=[])
+        result = SweepStatusResponse(pending=[], in_flight=[], exhausted=[])
         with AdminTeardropClient("http://test", token="tok.en.sig") as admin:
             with patch.object(
                 admin._async, "admin_get_sweep_status", new=AsyncMock(return_value=result)
@@ -398,6 +398,7 @@ class TestAdminSyncDelegation:
                 marketplace_description="",
                 base_price_usdc=0,
                 category="",
+                tags=[],
                 created_at="2026-07-17T00:00:00Z",
                 updated_at="2026-07-17T00:00:00Z",
             )

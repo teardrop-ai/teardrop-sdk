@@ -28,6 +28,7 @@ schedule = await client.schedules.update(
 runs = await client.schedules.runs(schedule.id, limit=10)
 async for run in client.schedules.runs_iter(schedule.id, limit=100):
     print(run.status, run.run_id)
+queued = await client.schedules.run_now(schedule.id)
 await client.schedules.delete(schedule.id)
 
 trigger = await client.event_triggers.create(CreateEventTriggerRequest(
@@ -41,6 +42,7 @@ print(trigger.secret)  # store now; only returned on create / rotate
 
 rotation = await client.event_triggers.rotate_secret(trigger.id)
 trigger_runs = await client.event_triggers.runs(trigger.id, limit=10)
+task = await client.event_triggers.get_run(trigger.id, "run-id")
 async for run in client.event_triggers.runs_iter(trigger.id, limit=100):
     print(run.status, run.run_id)
 ```
