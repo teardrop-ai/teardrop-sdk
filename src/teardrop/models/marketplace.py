@@ -265,6 +265,7 @@ class SweepStatusResponse(BaseModel):
     """Response from GET /admin/marketplace/sweep-status."""
 
     pending: list[SweepStatusItem]
+    in_flight: list[SweepStatusItem]
     exhausted: list[SweepStatusItem]
 
 

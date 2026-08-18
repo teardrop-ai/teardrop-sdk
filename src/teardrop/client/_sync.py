@@ -6,6 +6,7 @@ from typing import Any
 
 from teardrop.client._async import AsyncTeardropClient
 from teardrop.client.event_triggers import _SyncEventTriggersModule
+from teardrop.client.labeling import _SyncLabelingModule
 from teardrop.client.schedules import _SyncSchedulesModule
 from teardrop.models import (
     A2AAgentDeletedResponse,
@@ -100,6 +101,7 @@ class TeardropClient:
         self._async = AsyncTeardropClient(*args, **kwargs)
         self.schedules = _SyncSchedulesModule(self)
         self.event_triggers = _SyncEventTriggersModule(self)
+        self.labeling = _SyncLabelingModule(self)
         self._portal: Any | None = None
         self._portal_exit: Any | None = None
 

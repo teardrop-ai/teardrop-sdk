@@ -71,6 +71,7 @@ Full usage guides live under [docs/](docs/), one file per feature domain. Each i
 | Agent Wallets | [docs/agent-wallets.md](docs/agent-wallets.md) | CDP smart wallet for the org's agent |
 | Memory | [docs/memory.md](docs/memory.md) | Persistent org memory entries |
 | Schedules & Event Triggers | [docs/schedules-and-event-triggers.md](docs/schedules-and-event-triggers.md) | Interval and webhook-triggered runs |
+| Labeling | [docs/labeling.md](docs/labeling.md) | Definitions, predictions, results, and score overrides |
 | A2A Delegation | [docs/a2a-delegation.md](docs/a2a-delegation.md) | Trusted-agent delegation |
 | Admin Client | [docs/admin.md](docs/admin.md) | All `/admin/*` operations (billing, marketplace, identity, tools, memory, usage) |
 | Agent Card | [docs/agent-card.md](docs/agent-card.md) | A2A discovery card |

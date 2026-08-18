@@ -12,6 +12,7 @@ from teardrop.models import (
     ScheduledRunListResponse,
     ScheduledRunResult,
     ScheduledRunsPage,
+    ScheduleRunNowResponse,
     UpdateScheduleRequest,
 )
 
@@ -71,6 +72,15 @@ class SchedulesModule:
         self._c._raise_for_status(resp)
         return ScheduleDeletedResponse.model_validate(resp.json())
 
+    async def run_now(self, schedule_id: str) -> ScheduleRunNowResponse:
+        http = await self._c._get_http()
+        resp = await http.post(
+            f"{self._c._base_url}/agent/schedules/{_quote_path_segment(schedule_id)}/run",
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        return ScheduleRunNowResponse.model_validate(resp.json())
+
     async def runs(
         self,
         schedule_id: str,
@@ -127,6 +137,9 @@ class _SyncSchedulesModule:
 
     def delete(self, schedule_id: str) -> ScheduleDeletedResponse:
         return self._c._run(self._c._async.schedules.delete(schedule_id))
+
+    def run_now(self, schedule_id: str) -> ScheduleRunNowResponse:
+        return self._c._run(self._c._async.schedules.run_now(schedule_id))
 
     def runs(
         self,

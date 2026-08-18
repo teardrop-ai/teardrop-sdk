@@ -9,6 +9,7 @@ from teardrop.client.agent_card import _AgentCardMixin
 from teardrop.client.auth import _AuthMixin
 from teardrop.client.billing import _BillingMixin
 from teardrop.client.event_triggers import EventTriggersModule
+from teardrop.client.labeling import LabelingModule
 from teardrop.client.llm import _LlmMixin
 from teardrop.client.marketplace import _MarketplaceMixin
 from teardrop.client.mcp import _McpMixin
@@ -60,3 +61,4 @@ class AsyncTeardropClient(
         )
         self.schedules = SchedulesModule(self)
         self.event_triggers = EventTriggersModule(self)
+        self.labeling = LabelingModule(self)

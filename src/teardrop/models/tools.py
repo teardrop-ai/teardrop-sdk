@@ -19,6 +19,7 @@ class CreateOrgToolRequest(BaseModel):
     publish_as_mcp: bool | None = None
     marketplace_description: str | None = None
     base_price_usdc: int | None = None
+    tags: list[str] | None = None
 
 
 CreateCustomToolRequest = CreateOrgToolRequest
@@ -36,6 +37,7 @@ class UpdateOrgToolRequest(BaseModel):
     publish_as_mcp: bool | None = None
     marketplace_description: str | None = None
     base_price_usdc: int | None = None
+    tags: list[str] | None = None
 
 
 class OrgTool(BaseModel):
@@ -56,6 +58,7 @@ class OrgTool(BaseModel):
     marketplace_description: str
     base_price_usdc: int
     category: str
+    tags: list[str]
     created_at: str
     updated_at: str
 
