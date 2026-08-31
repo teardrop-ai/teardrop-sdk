@@ -168,3 +168,45 @@ class TestGetDelegations:
         await client.get_delegations()
         args, _ = mock_http.get.call_args
         assert args[0] == "http://test/a2a/delegations"
+
+    async def test_delivery_status_defaults_to_not_attempted(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            [
+                {
+                    "id": "d-1",
+                    "run_id": "run-1",
+                    "agent_url": "https://agent.example.com",
+                    "task_status": "pending",
+                    "task_type": "research",
+                    "cost_usdc": 100,
+                    "billing_method": "credit",
+                }
+            ]
+        )
+        result = await client.get_delegations()
+        assert result[0].delivery_status == "not_attempted"
+
+
+# ─── message status (spec 1.6.0) ─────────────────────────────────────────────
+
+
+class TestGetMessageStatus:
+    async def test_returns_raw_json(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"task_id": "t-1", "status": "completed"})
+        result = await client.get_message_status("t-1")
+        assert result == {"task_id": "t-1", "status": "completed"}
+
+    async def test_colon_path_with_quoted_task_id(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"status": "completed"})
+        await client.get_message_status("abc/123")
+        args, _ = mock_http.get.call_args
+        # colon in literal path segment preserved; param value quoted
+        assert args[0] == "http://test/message:status/abc%2F123"
+
+    async def test_no_auth_header_sent_without_credentials(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"status": "completed"})
+        client = AsyncTeardropClient("http://test")
+        client._http = mock_http
+        await client.get_message_status("t-1")
+        _, kwargs = mock_http.get.call_args
+        assert "headers" not in kwargs

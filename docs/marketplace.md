@@ -243,7 +243,61 @@ Teardrop offers three ways to extend agent capabilities. Choose based on your us
 - Internal tool for your org's agent? → **Custom Webhook Tool**
 - Integrating external services (Stripe, Slack, etc.)? → **MCP Server** or **Custom Webhook Tool**
 - Need stdio-based tool protocol? → **MCP Server**
+## Agent Registration & Directory (spec 1.6.0)
 
+Publish your org's A2A agent endpoint to the marketplace, browse the public
+directory, and fetch atomic USDC quotes.
+
+### Agent registration
+
+```python
+# Publish / update your A2A endpoint
+reg = await client.set_agent_registration(
+    MarketplaceAgentRegistrationRequest(agent_url="https://agent.example.com")
+)
+print(reg.agent_url, reg.updated_at)
+
+# Inspect current registration
+reg = await client.get_agent_registration()
+
+# Unpublish
+await client.delete_agent_registration()
+```
+
+### Public directory
+
+```python
+# Browse registered agents (cursor pagination)
+directory = await client.get_marketplace_agents(
+    sort="reputation",   # "name" (default) | "reputation"
+    stale="active",      # "all" (default) | "active" | "stale"
+    limit=20,
+)
+for agent in directory.agents:
+    print(agent.org_name, agent.tool_count, agent.reputation_score)
+
+if directory.next_cursor:
+    next_page = await client.get_marketplace_agents(
+        sort="reputation",
+        stale="active",
+        limit=20,
+        cursor=directory.next_cursor,
+    )
+
+# Browse authors
+authors = await client.get_marketplace_authors(limit=10)
+for author in authors.authors:
+    print(author.org_slug, author.total_calls)
+```
+
+### Price quotes
+
+```python
+quote = await client.get_marketplace_quote("acme/search")
+# quote.price_usdc: atomic USDC
+# quote.source: "override" | "marketplace"
+# quote.expires_at: advisory expiry matching the pricing-cache TTL
+```
 ---
 
 **Related:** [README](../README.md) · [Custom Webhook Tools](custom-tools.md) · [MCP Servers](mcp-servers.md) · [Agent Runs](agent-runs.md) · [Billing](billing.md)

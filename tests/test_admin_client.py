@@ -34,6 +34,9 @@ from teardrop.models import (
     OrgSpendingConfigResponse,
     OrgTool,
     PendingSettlementsResponse,
+    PossiblyDeliveredDelegationItem,
+    ResolveA2ADelegationRequest,
+    ResolveA2ADelegationResponse,
     RevenueSummaryResponse,
     SettlementBalanceResponse,
     SettlementRetryResponse,
@@ -92,7 +95,7 @@ def test_admin_surface_covers_every_spec_operation():
         for name in dir(_AdminMixin)
         if name.startswith("admin_") and callable(getattr(_AdminMixin, name))
     }
-    assert spec_operation_count == 29
+    assert spec_operation_count == 31
     assert len(implemented_methods) == spec_operation_count
 
 
@@ -587,3 +590,69 @@ class TestAdminTelemetry:
         args, kwargs = mock_http.get.call_args
         assert args[0] == "http://test/admin/telemetry/completeness"
         assert kwargs["params"] == {"days": 14}
+
+
+# -- Admin A2A delivery review (spec 1.6.0) -----------------------------------
+
+_POSSIBLY_DELIVERED = {
+    "id": "d-1",
+    "org_id": "org-1",
+    "run_id": "run-1",
+    "amount_usdc": 500,
+    "delivery_status": "unknown",
+    "refund_status": "pending",
+}
+
+
+class TestAdminPossiblyDelivered:
+    async def test_accepts_spec_bare_array_response(self, client, mock_http):
+        mock_http.get.return_value = _json_response([_POSSIBLY_DELIVERED])
+        result = await client.admin_list_possibly_delivered_delegations()
+        assert result[0].id == "d-1"
+
+    async def test_returns_parsed_items(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"items": [_POSSIBLY_DELIVERED]})
+        result = await client.admin_list_possibly_delivered_delegations()
+        assert len(result) == 1
+        assert isinstance(result[0], PossiblyDeliveredDelegationItem)
+        assert result[0].delivery_status == "unknown"
+
+    async def test_org_id_param_forwarded_and_skipped(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"items": []})
+        await client.admin_list_possibly_delivered_delegations(org_id="org-1")
+        _, kwargs = mock_http.get.call_args
+        assert kwargs["params"] == {"org_id": "org-1"}
+        await client.admin_list_possibly_delivered_delegations()
+        _, kwargs = mock_http.get.call_args
+        assert kwargs.get("params") in (None, {})
+
+    async def test_correct_url(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"items": []})
+        await client.admin_list_possibly_delivered_delegations()
+        args, _ = mock_http.get.call_args
+        assert args[0] == "http://test/admin/a2a/delegations/possibly-delivered"
+
+
+class TestAdminResolveDelegation:
+    async def test_sends_body_and_parses_response(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {"id": "d-1", "org_id": "org-1", "outcome": "confirmed", "refund_status": "refunded"}
+        )
+        request = ResolveA2ADelegationRequest(
+            org_id="org-1", outcome="confirmed", settlement_tx="0x" + "a" * 64
+        )
+        result = await client.admin_resolve_a2a_delegation("d-1", request)
+        assert isinstance(result, ResolveA2ADelegationResponse)
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/admin/a2a/delegations/d-1/resolve"
+        assert kwargs["json"]["outcome"] == "confirmed"
+        assert "reason" not in kwargs["json"]  # Default reason is omitted
+
+    async def test_quoted_delegation_id(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {"id": "d/1", "org_id": "o", "outcome": "failed", "refund_status": "cancelled"}
+        )
+        request = ResolveA2ADelegationRequest(org_id="o", outcome="failed")
+        await client.admin_resolve_a2a_delegation("d/1", request)
+        args, _ = mock_http.post.call_args
+        assert args[0] == "http://test/admin/a2a/delegations/d%2F1/resolve"

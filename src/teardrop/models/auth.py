@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TokenResponse(BaseModel):
@@ -49,6 +49,7 @@ class AuthMeResponse(MeResponse):
     role: str
     auth_method: str
     email: str
+    org_slug: str | None = None
 
 
 class SiweNonceResponse(BaseModel):
@@ -117,5 +118,41 @@ class CreateClientCredentialsResponse(BaseModel):
     client_secret: str
     org_id: str
     created_at: str
+
+    model_config = {"extra": "allow"}
+
+
+class PrincipalSpendLimitRequest(BaseModel):
+    """Request body for PUT /org/principals/{principal_id}/spend-limit."""
+
+    daily_limit_usdc: int = Field(gt=0, le=100_000_000)
+    is_paused: bool = False
+
+
+class PrincipalSpendLimitResponse(BaseModel):
+    """Response from GET/PUT /org/principals spend-limit endpoints."""
+
+    principal_id: str
+    daily_limit_usdc: int
+    is_paused: bool
+    created_at: str
+    updated_at: str
+
+    model_config = {"extra": "allow"}
+
+
+class X402BootstrapResponse(BaseModel):
+    """Response from POST /token with grant_type=x402.
+
+    ``client_secret`` is a one-time secret returned only on first bootstrap;
+    it is omitted when an existing credential is reused.
+    """
+
+    access_token: str
+    token_type: str
+    expires_in: int
+    client_id: str
+    org_id: str
+    client_secret: str | None = None
 
     model_config = {"extra": "allow"}

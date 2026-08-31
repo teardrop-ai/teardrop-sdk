@@ -29,6 +29,9 @@ from teardrop.models import (
     OrgSpendingConfigResponse,
     OrgTool,
     PendingSettlementsResponse,
+    PossiblyDeliveredDelegationItem,
+    ResolveA2ADelegationRequest,
+    ResolveA2ADelegationResponse,
     RevenueSummaryResponse,
     SettlementBalanceResponse,
     SettlementRetryResponse,
@@ -93,6 +96,16 @@ class AdminTeardropClient:
 
     def admin_list_a2a_agents(self, org_id: str) -> list[A2AAgentListItem]:
         return self._run(self._async.admin_list_a2a_agents(org_id))
+
+    def admin_list_possibly_delivered_delegations(
+        self, org_id: str | None = None
+    ) -> list[PossiblyDeliveredDelegationItem]:
+        return self._run(self._async.admin_list_possibly_delivered_delegations(org_id))
+
+    def admin_resolve_a2a_delegation(
+        self, delegation_id: str, request: ResolveA2ADelegationRequest
+    ) -> ResolveA2ADelegationResponse:
+        return self._run(self._async.admin_resolve_a2a_delegation(delegation_id, request))
 
     # ── Admin Billing ─────────────────────────────────────────────────────────
 

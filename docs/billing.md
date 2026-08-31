@@ -102,7 +102,24 @@ summary = await client.get_usage(start="2026-04-01", end="2026-04-30")
 Usage events in the `client.run()` stream also include cache performance metrics:
 - `cache_read_tokens`: Input tokens served from cache (cheaper/faster).
 - `cache_creation_tokens`: Tokens written to the cache for future use.
+## Principal Spend Limits (spec 1.6.0)
 
+Org-scoped daily spend limits per principal (user or client credential):
+
+```python
+limits = await client.get_org_principal_spend_limits()
+for limit in limits:
+    print(limit.principal_id, limit.daily_limit_usdc, limit.is_paused)
+
+# Upsert a limit (set daily cap, optionally pause the principal)
+await client.set_org_principal_spend_limit(
+    "principal-id",
+    PrincipalSpendLimitRequest(daily_limit_usdc=2500, is_paused=False),
+)
+
+# Remove a limit
+await client.delete_org_principal_spend_limit("principal-id")
+```
 ---
 
 **Related:** [README](../README.md) · [Agent Runs](agent-runs.md) (x402 retries) · [Marketplace](marketplace.md) (author earnings) · [spec/openapi.json](../spec/openapi.json)
