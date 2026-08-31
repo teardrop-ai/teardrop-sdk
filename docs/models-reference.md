@@ -32,6 +32,13 @@ Use this table to find which model backs which client method.
 | `MarketplaceImportPreviewResponse`, `MarketplaceImportPublishResponse`, `ImportPreviewSchemaStatus`, `ImportPreviewDroppedFeatures` | marketplace import |
 | `AddTrustedAgentRequest`, `TrustedAgent` | A2A delegation |
 | `A2ADelegationEvent`, `A2AAgentDeletedResponse` | delegation history and trusted-agent removal |
+| `PossiblyDeliveredDelegationItem`, `ResolveA2ADelegationRequest`, `ResolveA2ADelegationResponse` | `admin_list_possibly_delivered_delegations()`, `admin_resolve_a2a_delegation()` |
+| `MarketplaceAgentRegistrationRequest`, `MarketplaceAgentRegistrationResponse` | `get/set/delete_agent_registration()` |
+| `MarketplaceAgentSummary`, `MarketplaceAgentDirectoryResponse` | `get_marketplace_agents()` |
+| `MarketplaceAuthorSummary`, `MarketplaceAuthorIndexResponse` | `get_marketplace_authors()` |
+| `MarketplaceQuoteResponse` | `get_marketplace_quote()` |
+| `PrincipalSpendLimitRequest`, `PrincipalSpendLimitResponse` | `get/set/delete_org_principal_spend_limit()` |
+| `X402BootstrapResponse` | `bootstrap_x402()` |
 | `AgentWallet`, `AgentWalletResponse`, `AgentWalletDeactivatedResponse`, `WalletDeletedResponse` | agent wallets |
 | `AdminCreateA2AAgentRequest`, `AdminCreateClientCredentialsRequest`, `AdminCreateOrgRequest`, `AdminCreateUserRequest`, `AdminTopupRequest`, `CompleteWithdrawalRequest`, `SpendingConfigUpdate`, `ToolPricingOverrideRequest` | `admin.*` client methods |
 | `AdminMemoryItem`, `AdminMemoryListResponse`, `AdminMemoryPurgeResponse`, `AdminWithdrawalItem`, `AdminWithdrawalListResponse`, `SweepStatusItem`, `SweepStatusResponse` | admin responses |

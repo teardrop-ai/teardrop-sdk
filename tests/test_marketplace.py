@@ -11,6 +11,10 @@ from teardrop.exceptions import NotFoundError
 from teardrop.models import (
     AuthorConfig,
     EarningsEntry,
+    MarketplaceAgentDirectoryResponse,
+    MarketplaceAgentRegistrationRequest,
+    MarketplaceAgentRegistrationResponse,
+    MarketplaceAuthorIndexResponse,
     MarketplaceAuthorProfileResponse,
     MarketplaceBalanceResponse,
     MarketplaceCatalogDetailResponse,
@@ -19,6 +23,7 @@ from teardrop.models import (
     MarketplaceImportPreviewResponse,
     MarketplaceImportPublishResponse,
     MarketplaceImportPublishToolRequest,
+    MarketplaceQuoteResponse,
     MarketplaceSubscription,
     MarketplaceSubscriptionListResponse,
     MarketplaceTool,
@@ -63,6 +68,16 @@ _AUTHOR_CONFIG = {
     "settlement_wallet": "0xSETTLE",
     "created_at": "2026-01-01T00:00:00Z",
     "updated_at": "2026-01-01T00:00:00Z",
+}
+
+_AGENT_SUMMARY = {
+    "agent_card_url": "https://a.dev/.well-known/agent-card.json",
+    "agent_url": "https://a.dev",
+    "catalog_endpoint": "https://a.dev/catalog",
+    "message_endpoint": "https://a.dev/message",
+    "org_name": "Acme",
+    "org_slug": "acme",
+    "tool_count": 3,
 }
 
 _EARNINGS = {
@@ -517,3 +532,157 @@ class TestMarketplaceFeedbackAndImport:
         assert args[0] == "http://test/marketplace/import/publish"
         assert kwargs["json"]["server_id"] == "srv-1"
         assert kwargs["json"]["tools"][0]["remote_tool_name"] == "search"
+
+
+# ─── agent registration / directory / authors / quote (spec 1.6.0) ──────────
+
+
+class TestAgentRegistration:
+    @pytest.mark.parametrize("agent_url", ["", "x" * 2049])
+    def test_agent_url_constraints(self, agent_url):
+        with pytest.raises(ValueError):
+            MarketplaceAgentRegistrationRequest(agent_url=agent_url)
+
+    async def test_get_returns_registration(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {"agent_url": "https://a.dev", "created_at": "t", "org_id": "o", "updated_at": "t"}
+        )
+        result = await client.get_agent_registration()
+        assert isinstance(result, MarketplaceAgentRegistrationResponse)
+        args, _ = mock_http.get.call_args
+        assert args[0] == "http://test/marketplace/agent-registration"
+
+    async def test_put_sends_agent_url(self, client, mock_http):
+        mock_http.put.return_value = _json_response(
+            {"agent_url": "https://a.dev", "created_at": "t", "org_id": "o", "updated_at": "t"}
+        )
+        result = await client.set_agent_registration(
+            MarketplaceAgentRegistrationRequest(agent_url="https://a.dev")
+        )
+        assert isinstance(result, MarketplaceAgentRegistrationResponse)
+        args, kwargs = mock_http.put.call_args
+        assert args[0] == "http://test/marketplace/agent-registration"
+        assert kwargs["json"] == {"agent_url": "https://a.dev"}
+
+    async def test_delete_returns_none(self, client, mock_http):
+        mock_http.delete.return_value = _json_response({}, status=204)
+        assert await client.delete_agent_registration() is None
+        args, _ = mock_http.delete.call_args
+        assert args[0] == "http://test/marketplace/agent-registration"
+
+
+class TestMarketplaceDirectory:
+    async def test_returns_parsed_agents(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {"agents": [_AGENT_SUMMARY], "next_cursor": "c2"}
+        )
+        result = await client.get_marketplace_agents()
+        assert isinstance(result, MarketplaceAgentDirectoryResponse)
+        assert result.agents[0].org_slug == "acme"
+        assert result.next_cursor == "c2"
+
+    async def test_params_forwarded_and_none_skipped(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"agents": []})
+        await client.get_marketplace_agents(q="search", sort="reputation", stale="active", limit=5)
+        _, kwargs = mock_http.get.call_args
+        assert kwargs["params"] == {
+            "q": "search",
+            "sort": "reputation",
+            "stale": "active",
+            "limit": 5,
+        }
+        await client.get_marketplace_agents()
+        _, kwargs = mock_http.get.call_args
+        assert kwargs["params"] == {}
+
+    async def test_correct_url(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"agents": []})
+        await client.get_marketplace_agents()
+        args, _ = mock_http.get.call_args
+        assert args[0] == "http://test/marketplace/agents"
+
+    async def test_no_auth_header_sent_without_credentials(self, mock_http):
+        client = AsyncTeardropClient("http://test")
+        client._http = mock_http
+        mock_http.get.return_value = _json_response({"agents": []})
+        await client.get_marketplace_agents()
+        _, kwargs = mock_http.get.call_args
+        assert "headers" not in kwargs
+
+
+class TestMarketplaceAuthors:
+    async def test_returns_parsed_authors(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "authors": [
+                    {"org_name": "Acme", "org_slug": "acme", "tool_count": 2, "total_calls": 10}
+                ]
+            }
+        )
+        result = await client.get_marketplace_authors()
+        assert isinstance(result, MarketplaceAuthorIndexResponse)
+        assert result.authors[0].org_slug == "acme"
+
+    async def test_correct_url_and_params(self, client, mock_http):
+        mock_http.get.return_value = _json_response({"authors": []})
+        await client.get_marketplace_authors(q="ac", limit=3, cursor="x")
+        args, kwargs = mock_http.get.call_args
+        assert args[0] == "http://test/marketplace/authors"
+        assert kwargs["params"] == {"q": "ac", "limit": 3, "cursor": "x"}
+
+
+class TestMarketplaceQuote:
+    async def test_returns_quote(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "qualified_name": "acme/search",
+                "price_usdc": 1500,
+                "source": "marketplace",
+                "expires_at": "2026-01-01T00:00:00Z",
+            }
+        )
+        result = await client.get_marketplace_quote("acme/search")
+        assert isinstance(result, MarketplaceQuoteResponse)
+        assert result.price_usdc == 1500
+        assert result.source == "marketplace"
+
+    async def test_tool_param_forwarded(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "qualified_name": "acme/search",
+                "price_usdc": 1,
+                "source": "override",
+                "expires_at": "2026-01-01T00:00:00Z",
+            }
+        )
+        await client.get_marketplace_quote("acme/search")
+        _, kwargs = mock_http.get.call_args
+        assert kwargs["params"] == {"tool": "acme/search"}
+
+    async def test_no_auth_header_sent_without_credentials(self, mock_http):
+        client = AsyncTeardropClient("http://test")
+        client._http = mock_http
+        mock_http.get.return_value = _json_response(
+            {
+                "qualified_name": "acme/search",
+                "price_usdc": 1,
+                "source": "marketplace",
+                "expires_at": "2026-01-01T00:00:00Z",
+            }
+        )
+        await client.get_marketplace_quote("acme/search")
+        _, kwargs = mock_http.get.call_args
+        assert "headers" not in kwargs
+
+    @pytest.mark.parametrize("price_usdc", [-1, 100_000_001])
+    async def test_rejects_out_of_range_price(self, client, mock_http, price_usdc):
+        mock_http.get.return_value = _json_response(
+            {
+                "qualified_name": "acme/search",
+                "price_usdc": price_usdc,
+                "source": "marketplace",
+                "expires_at": "2026-01-01T00:00:00Z",
+            }
+        )
+        with pytest.raises(ValueError):
+            await client.get_marketplace_quote("acme/search")

@@ -454,3 +454,82 @@ class MarketplaceImportPublishResponse(BaseModel):
     errors: list[MarketplaceImportPublishError]
 
     model_config = {"extra": "allow"}
+
+
+class MarketplaceQuoteResponse(BaseModel):
+    """Response from GET /marketplace/quote."""
+
+    qualified_name: str
+    price_usdc: int = Field(ge=0, le=100_000_000)
+    source: Literal["override", "marketplace"]
+    expires_at: str
+    currency: str = "USDC"
+
+    model_config = {"extra": "allow"}
+
+
+class MarketplaceAgentSummary(BaseModel):
+    """Agent entry inside the marketplace agent directory."""
+
+    agent_card_url: str
+    agent_url: str
+    catalog_endpoint: str
+    message_endpoint: str
+    org_name: str
+    org_slug: str
+    tool_count: int
+    confidence: float | None = None
+    is_stale: bool | None = None
+    last_event_at: str | None = None
+    reputation_score: float | None = None
+    sample_size: float | None = None
+    success_rate: float | None = None
+    unique_caller_count: int | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class MarketplaceAgentDirectoryResponse(BaseModel):
+    """Response from GET /marketplace/agents."""
+
+    agents: list[MarketplaceAgentSummary]
+    next_cursor: str | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class MarketplaceAuthorSummary(BaseModel):
+    """Author entry inside the marketplace author index."""
+
+    org_name: str
+    org_slug: str
+    tool_count: int
+    total_calls: int
+
+    model_config = {"extra": "allow"}
+
+
+class MarketplaceAuthorIndexResponse(BaseModel):
+    """Response from GET /marketplace/authors."""
+
+    authors: list[MarketplaceAuthorSummary]
+    next_cursor: str | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class MarketplaceAgentRegistrationRequest(BaseModel):
+    """Request body for PUT /marketplace/agent-registration."""
+
+    agent_url: str = Field(min_length=1, max_length=2048)
+
+
+class MarketplaceAgentRegistrationResponse(BaseModel):
+    """Response from GET/PUT /marketplace/agent-registration."""
+
+    agent_url: str
+    created_at: str
+    org_id: str
+    updated_at: str
+
+    model_config = {"extra": "allow"}

@@ -16,6 +16,14 @@ from teardrop.models import (
 
 
 class _A2AMixin:
+    async def get_message_status(self, task_id: str) -> dict[str, Any]:
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/message:status/{_quote_path_segment(task_id)}",
+        )
+        self._raise_for_status(resp)
+        return resp.json()
+
     async def add_trusted_agent(self, request: AddTrustedAgentRequest) -> OrgA2AAgentResponse:
         http = await self._get_http()
         resp = await http.post(

@@ -6,7 +6,11 @@ from typing import Any
 
 from teardrop.client._core import _quote_path_segment
 from teardrop.models import (
+    MarketplaceAgentDirectoryResponse,
+    MarketplaceAgentRegistrationRequest,
+    MarketplaceAgentRegistrationResponse,
     MarketplaceAuthorConfigResponse,
+    MarketplaceAuthorIndexResponse,
     MarketplaceAuthorProfileResponse,
     MarketplaceBalanceResponse,
     MarketplaceCatalogDetailResponse,
@@ -18,6 +22,7 @@ from teardrop.models import (
     MarketplaceImportPublishRequest,
     MarketplaceImportPublishResponse,
     MarketplaceImportPublishToolRequest,
+    MarketplaceQuoteResponse,
     MarketplaceSubscriptionListResponse,
     MarketplaceSubscriptionResponse,
     MarketplaceWithdrawalResponse,
@@ -31,6 +36,95 @@ from teardrop.models import (
 
 
 class _MarketplaceMixin:
+    async def get_agent_registration(self) -> MarketplaceAgentRegistrationResponse:
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/marketplace/agent-registration",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return MarketplaceAgentRegistrationResponse.model_validate(resp.json())
+
+    async def set_agent_registration(
+        self, request: MarketplaceAgentRegistrationRequest
+    ) -> MarketplaceAgentRegistrationResponse:
+        http = await self._get_http()
+        resp = await http.put(
+            f"{self._base_url}/marketplace/agent-registration",
+            json=request.model_dump(exclude_none=True),
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return MarketplaceAgentRegistrationResponse.model_validate(resp.json())
+
+    async def delete_agent_registration(self) -> None:
+        http = await self._get_http()
+        resp = await http.delete(
+            f"{self._base_url}/marketplace/agent-registration",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return None
+
+    async def get_marketplace_agents(
+        self,
+        *,
+        q: str | None = None,
+        sort: str | None = None,
+        stale: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> MarketplaceAgentDirectoryResponse:
+        http = await self._get_http()
+        params: dict[str, Any] = {}
+        if q is not None:
+            params["q"] = q
+        if sort is not None:
+            params["sort"] = sort
+        if stale is not None:
+            params["stale"] = stale
+        if limit is not None:
+            params["limit"] = limit
+        if cursor is not None:
+            params["cursor"] = cursor
+        resp = await http.get(
+            f"{self._base_url}/marketplace/agents",
+            params=params,
+        )
+        self._raise_for_status(resp)
+        return MarketplaceAgentDirectoryResponse.model_validate(resp.json())
+
+    async def get_marketplace_authors(
+        self,
+        *,
+        q: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> MarketplaceAuthorIndexResponse:
+        http = await self._get_http()
+        params: dict[str, Any] = {}
+        if q is not None:
+            params["q"] = q
+        if limit is not None:
+            params["limit"] = limit
+        if cursor is not None:
+            params["cursor"] = cursor
+        resp = await http.get(
+            f"{self._base_url}/marketplace/authors",
+            params=params,
+        )
+        self._raise_for_status(resp)
+        return MarketplaceAuthorIndexResponse.model_validate(resp.json())
+
+    async def get_marketplace_quote(self, tool: str) -> MarketplaceQuoteResponse:
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/marketplace/quote",
+            params={"tool": tool},
+        )
+        self._raise_for_status(resp)
+        return MarketplaceQuoteResponse.model_validate(resp.json())
+
     async def get_marketplace_catalog(
         self,
         *,

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class AddTrustedAgentRequest(BaseModel):
@@ -63,5 +65,56 @@ class A2ADelegationEvent(BaseModel):
     created_at: str | None = None
     error: str | None = None
     settlement_tx: str | None = None
+    delivery_status: str = "not_attempted"
+    delivery_error: str | None = None
+    delivery_resolved_at: str | None = None
+    delivery_settlement_tx: str | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class PossiblyDeliveredDelegationItem(BaseModel):
+    """Item returned by GET /admin/a2a/delegations/possibly-delivered."""
+
+    id: str
+    org_id: str
+    run_id: str
+    amount_usdc: int
+    delivery_status: str
+    refund_status: str
+    agent_name: str | None = None
+    agent_url: str | None = None
+    billing_method: str | None = None
+    created_at: str | None = None
+    delivery_error: str | None = None
+    delivery_settlement_tx: str | None = None
+    delivery_started_at: str | None = None
+    settlement_tx: str | None = None
+    task_status: str | None = None
+    task_type: str | None = None
+
+    model_config = {"extra": "allow"}
+
+
+class ResolveA2ADelegationRequest(BaseModel):
+    """Request body for POST /admin/a2a/delegations/{delegation_id}/resolve."""
+
+    org_id: str = Field(min_length=1, max_length=200)
+    outcome: Literal["confirmed", "failed"]
+    reason: str = Field(default="", max_length=500)
+    settlement_tx: str | None = Field(
+        default=None,
+        max_length=66,
+        pattern=r"^0x[a-fA-F0-9]{64}$",
+    )
+
+
+class ResolveA2ADelegationResponse(BaseModel):
+    """Response from POST /admin/a2a/delegations/{delegation_id}/resolve."""
+
+    id: str
+    org_id: str
+    outcome: Literal["confirmed", "failed"]
+    refund_status: Literal["cancelled", "refunded"]
 
     model_config = {"extra": "allow"}

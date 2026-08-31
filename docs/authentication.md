@@ -94,7 +94,21 @@ for tool in tools:
     # access_mode: "included" | "subscribed"
     print(f"{tool.name} ({tool.source}): {tool.access_mode}")
 ```
+## x402 Payment-First Org Bootstrap (spec 1.6.0)
 
+A wallet can bootstrap a new org by paying on-chain first, then exchanging the
+payment header for a token plus a one-time client credential:
+
+```python
+bootstrap = await client.bootstrap_x402(payment_header)
+# bootstrap.access_token: signed JWT for the new org
+# bootstrap.client_id:    machine credential id
+# bootstrap.client_secret: one-time secret — only returned on FIRST bootstrap;
+#                         omitted when the existing credential is reused
+```
+
+Store `client_secret` immediately — it cannot be retrieved again. Subsequent
+authentications use the standard client-credentials flow.
 ---
 
 **Related:** [README](../README.md) · [Agent Runs](agent-runs.md) · [Marketplace](marketplace.md) · [spec/openapi.json](../spec/openapi.json)

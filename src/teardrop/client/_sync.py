@@ -34,7 +34,11 @@ from teardrop.models import (
     LinkWalletResponse,
     LlmConfigDeletedResponse,
     LlmConfigResponse,
+    MarketplaceAgentDirectoryResponse,
+    MarketplaceAgentRegistrationRequest,
+    MarketplaceAgentRegistrationResponse,
     MarketplaceAuthorConfigResponse,
+    MarketplaceAuthorIndexResponse,
     MarketplaceAuthorProfileResponse,
     MarketplaceBalanceResponse,
     MarketplaceCatalogDetailResponse,
@@ -44,6 +48,7 @@ from teardrop.models import (
     MarketplaceImportPreviewResponse,
     MarketplaceImportPublishResponse,
     MarketplaceImportPublishToolRequest,
+    MarketplaceQuoteResponse,
     MarketplaceSubscriptionListResponse,
     MarketplaceSubscriptionResponse,
     MarketplaceWithdrawalResponse,
@@ -56,6 +61,8 @@ from teardrop.models import (
     ModelBenchmarksResponse,
     OrgCredentialItem,
     OrgToolResponse,
+    PrincipalSpendLimitRequest,
+    PrincipalSpendLimitResponse,
     PublicReputationResponse,
     RegenerateCredentialsResponse,
     ResendVerificationResponse,
@@ -91,6 +98,7 @@ from teardrop.models import (
     Wallet,
     WalletDeletedResponse,
     WithdrawRequest,
+    X402BootstrapResponse,
 )
 
 
@@ -197,6 +205,20 @@ class TeardropClient:
 
     def regenerate_org_credentials(self) -> RegenerateCredentialsResponse:
         return self._run(self._async.regenerate_org_credentials())
+
+    def get_org_principal_spend_limits(self) -> list[PrincipalSpendLimitResponse]:
+        return self._run(self._async.get_org_principal_spend_limits())
+
+    def set_org_principal_spend_limit(
+        self, principal_id: str, request: PrincipalSpendLimitRequest
+    ) -> PrincipalSpendLimitResponse:
+        return self._run(self._async.set_org_principal_spend_limit(principal_id, request))
+
+    def delete_org_principal_spend_limit(self, principal_id: str) -> None:
+        return self._run(self._async.delete_org_principal_spend_limit(principal_id))
+
+    def bootstrap_x402(self, payment_header: str) -> X402BootstrapResponse:
+        return self._run(self._async.bootstrap_x402(payment_header))
 
     def get_balance(self) -> BillingBalanceResponse:
         return self._run(self._async.get_balance())
@@ -321,6 +343,44 @@ class TeardropClient:
     def get_marketplace_catalog(self, **kwargs: Any) -> MarketplaceCatalogResponse:
         return self._run(self._async.get_marketplace_catalog(**kwargs))
 
+    def get_agent_registration(self) -> MarketplaceAgentRegistrationResponse:
+        return self._run(self._async.get_agent_registration())
+
+    def set_agent_registration(
+        self, request: MarketplaceAgentRegistrationRequest
+    ) -> MarketplaceAgentRegistrationResponse:
+        return self._run(self._async.set_agent_registration(request))
+
+    def delete_agent_registration(self) -> None:
+        return self._run(self._async.delete_agent_registration())
+
+    def get_marketplace_agents(
+        self,
+        *,
+        q: str | None = None,
+        sort: str | None = None,
+        stale: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> MarketplaceAgentDirectoryResponse:
+        return self._run(
+            self._async.get_marketplace_agents(
+                q=q, sort=sort, stale=stale, limit=limit, cursor=cursor
+            )
+        )
+
+    def get_marketplace_authors(
+        self,
+        *,
+        q: str | None = None,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> MarketplaceAuthorIndexResponse:
+        return self._run(self._async.get_marketplace_authors(q=q, limit=limit, cursor=cursor))
+
+    def get_marketplace_quote(self, tool: str) -> MarketplaceQuoteResponse:
+        return self._run(self._async.get_marketplace_quote(tool))
+
     def get_marketplace_catalog_detail(
         self, org_slug: str, tool_name: str
     ) -> MarketplaceCatalogDetailResponse:
@@ -428,6 +488,9 @@ class TeardropClient:
 
     def get_delegations(self, **kwargs: Any) -> list[A2ADelegationEvent]:
         return self._run(self._async.get_delegations(**kwargs))
+
+    def get_message_status(self, task_id: str) -> dict[str, Any]:
+        return self._run(self._async.get_message_status(task_id))
 
     def clear_llm_api_key(
         self,

@@ -20,6 +20,9 @@ from teardrop.models import (
     CreateOrgResponse,
     CreateUserResponse,
     PendingSettlementsResponse,
+    PossiblyDeliveredDelegationItem,
+    ResolveA2ADelegationRequest,
+    ResolveA2ADelegationResponse,
     RevenueSummaryResponse,
     SettlementRetryResponse,
     SpendingConfigUpdate,
@@ -78,6 +81,35 @@ class _AdminMixin:
         self._raise_for_status(resp)
         data = resp.json()
         return [A2AAgentListItem.model_validate(item) for item in data]
+
+    async def admin_list_possibly_delivered_delegations(
+        self, org_id: str | None = None
+    ) -> list[PossiblyDeliveredDelegationItem]:
+        http = await self._get_http()
+        params: dict[str, Any] = {}
+        if org_id is not None:
+            params["org_id"] = org_id
+        resp = await http.get(
+            f"{self._base_url}/admin/a2a/delegations/possibly-delivered",
+            params=params or None,
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        data = resp.json()
+        items = data if isinstance(data, list) else data.get("items", [])
+        return [PossiblyDeliveredDelegationItem.model_validate(item) for item in items]
+
+    async def admin_resolve_a2a_delegation(
+        self, delegation_id: str, request: ResolveA2ADelegationRequest
+    ) -> ResolveA2ADelegationResponse:
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/admin/a2a/delegations/{_quote_path_segment(delegation_id)}/resolve",
+            json=request.model_dump(exclude_defaults=True, exclude_none=True),
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return ResolveA2ADelegationResponse.model_validate(resp.json())
 
     # ── Admin Billing ─────────────────────────────────────────────────────────
 
