@@ -468,6 +468,22 @@ class MarketplaceQuoteResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
+class MarketplaceDelegationQuoteResponse(BaseModel):
+    """Response from GET /marketplace/delegation/quote.
+
+    Deterministic default per-delegation charge: global cost cap plus
+    platform fee. Public/unauthenticated endpoint.
+    """
+
+    max_cost_usdc: int = Field(ge=0, le=100_000_000)
+    platform_fee_bps: int = Field(ge=0)
+    effective_max_charge_usdc: int = Field(ge=0, le=100_000_000)
+    expires_at: str
+    currency: Literal["USDC"] = "USDC"
+
+    model_config = {"extra": "allow"}
+
+
 class MarketplaceAgentSummary(BaseModel):
     """Agent entry inside the marketplace agent directory."""
 
@@ -478,6 +494,7 @@ class MarketplaceAgentSummary(BaseModel):
     org_name: str
     org_slug: str
     tool_count: int
+    registered_at: str | None = None
     confidence: float | None = None
     is_stale: bool | None = None
     last_event_at: str | None = None

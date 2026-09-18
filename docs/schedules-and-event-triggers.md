@@ -17,6 +17,7 @@ schedule = await client.schedules.create(CreateScheduleRequest(
     prompt="Summarize portfolio balances",
     interval_seconds=86_400,
     callback_url="https://callback.example.com/schedules",
+    callback_format="json",  # "json", "text", or "x" (when X broadcasts are enabled)
 ))
 
 schedules = await client.schedules.list()

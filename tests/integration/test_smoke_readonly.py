@@ -19,6 +19,7 @@ from teardrop.models import (
     BillingPricingResponse,
     CreditHistoryResponse,
     MarketplaceCatalogResponse,
+    MarketplaceDelegationQuoteResponse,
     MarketplaceEarningsResponse,
     MarketplaceSubscriptionListResponse,
     MemoryListResponse,
@@ -46,6 +47,16 @@ class TestPublicEndpoints:
         result = await async_client.get_marketplace_catalog()
         assert isinstance(result, MarketplaceCatalogResponse)
         assert isinstance(result.tools, list)
+
+    async def test_get_marketplace_delegation_quote(
+        self, async_client: AsyncTeardropClient
+    ) -> None:
+        result = await async_client.get_marketplace_delegation_quote()
+        assert isinstance(result, MarketplaceDelegationQuoteResponse)
+        assert result.max_cost_usdc >= 0
+        assert result.platform_fee_bps >= 0
+        assert result.effective_max_charge_usdc >= result.max_cost_usdc
+        assert result.currency == "USDC"
 
 
 # ─── Tier 2: authenticated read-only endpoints ────────────────────────────────

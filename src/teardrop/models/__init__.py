@@ -139,6 +139,7 @@ from teardrop.models.marketplace import (
     MarketplaceBalanceResponse,
     MarketplaceCatalogDetailResponse,
     MarketplaceCatalogResponse,
+    MarketplaceDelegationQuoteResponse,
     MarketplaceEarningEntry,
     MarketplaceEarningsByToolEntry,
     MarketplaceEarningsByToolResponse,
@@ -237,6 +238,9 @@ from teardrop.models.scheduling import (
     UpdateScheduleRequest,
 )
 from teardrop.models.telemetry import (
+    DiscoveryFunnelResponse,
+    DiscoveryStageDay,
+    MachineFunnelResponse,
     TelemetryCompletenessBySource,
     TelemetryCompletenessResponse,
 )
@@ -359,6 +363,7 @@ __all__ = [
     "MarketplaceBalanceResponse",
     "MarketplaceCatalogDetailResponse",
     "MarketplaceCatalogResponse",
+    "MarketplaceDelegationQuoteResponse",
     "MarketplaceCompleteWithdrawalResponse",
     "MarketplaceEarningEntry",
     "MarketplaceEarningsByToolEntry",
@@ -457,6 +462,9 @@ __all__ = [
     "StripeTopupStatusResponse",
     "SweepStatusItem",
     "SweepStatusResponse",
+    "DiscoveryFunnelResponse",
+    "DiscoveryStageDay",
+    "MachineFunnelResponse",
     "TelemetryCompletenessBySource",
     "TelemetryCompletenessResponse",
     "TestMcpToolRequest",

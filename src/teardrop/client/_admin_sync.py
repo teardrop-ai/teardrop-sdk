@@ -24,6 +24,8 @@ from teardrop.models import (
     CreateClientCredentialsResponse,
     CreateOrgResponse,
     CreateUserResponse,
+    DiscoveryFunnelResponse,
+    MachineFunnelResponse,
     MarketplaceSweepResponse,
     McpServerResponse,
     OrgSpendingConfigResponse,
@@ -231,3 +233,9 @@ class AdminTeardropClient:
 
     def admin_get_telemetry_completeness(self, *, days: int = 7) -> TelemetryCompletenessResponse:
         return self._run(self._async.admin_get_telemetry_completeness(days=days))
+
+    def admin_get_discovery_funnel(self, *, days: int = 7) -> DiscoveryFunnelResponse:
+        return self._run(self._async.admin_get_discovery_funnel(days=days))
+
+    def admin_get_machine_funnel(self, *, days: int = 7) -> MachineFunnelResponse:
+        return self._run(self._async.admin_get_machine_funnel(days=days))
