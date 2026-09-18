@@ -28,6 +28,8 @@ from teardrop.models import (
     CreateClientCredentialsResponse,
     CreateOrgResponse,
     CreateUserResponse,
+    DiscoveryFunnelResponse,
+    MachineFunnelResponse,
     MarketplaceCompleteWithdrawalResponse,
     MarketplaceSweepResponse,
     McpServerResponse,
@@ -95,7 +97,7 @@ def test_admin_surface_covers_every_spec_operation():
         for name in dir(_AdminMixin)
         if name.startswith("admin_") and callable(getattr(_AdminMixin, name))
     }
-    assert spec_operation_count == 31
+    assert spec_operation_count == 33
     assert len(implemented_methods) == spec_operation_count
 
 
@@ -590,6 +592,40 @@ class TestAdminTelemetry:
         args, kwargs = mock_http.get.call_args
         assert args[0] == "http://test/admin/telemetry/completeness"
         assert kwargs["params"] == {"days": 14}
+
+    async def test_admin_get_discovery_funnel(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "window_days": 7,
+                "quote_hits": 12,
+                "series": [{"date": "2026-09-17", "quote_hits": 4}],
+            }
+        )
+
+        result = await client.admin_get_discovery_funnel(days=30)
+
+        assert isinstance(result, DiscoveryFunnelResponse)
+        assert result.quote_hits == 12
+        assert result.series[0].date == "2026-09-17"
+        args, kwargs = mock_http.get.call_args
+        assert args[0] == "http://test/admin/telemetry/discovery-funnel"
+        assert kwargs["params"] == {"days": 30}
+        assert "Authorization" in kwargs["headers"]
+
+    async def test_admin_get_machine_funnel(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {"window_days": 7, "settled_calls": 9, "settled_revenue_usdc": 2500}
+        )
+
+        result = await client.admin_get_machine_funnel(days=14)
+
+        assert isinstance(result, MachineFunnelResponse)
+        assert result.settled_calls == 9
+        assert result.settled_revenue_usdc == 2500
+        args, kwargs = mock_http.get.call_args
+        assert args[0] == "http://test/admin/telemetry/machine-funnel"
+        assert kwargs["params"] == {"days": 14}
+        assert "Authorization" in kwargs["headers"]
 
 
 # -- Admin A2A delivery review (spec 1.6.0) -----------------------------------

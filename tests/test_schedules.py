@@ -107,6 +107,20 @@ class TestScheduleRequestValidation:
     def test_update_excludes_create_only_first_run_at(self):
         assert "first_run_at" not in UpdateScheduleRequest.model_fields
 
+    def test_x_callback_format_is_supported_across_schedule_models(self):
+        create_request = CreateScheduleRequest(
+            name="X Broadcast",
+            prompt="Post the latest update",
+            interval_seconds=86400,
+            callback_format="x",
+        )
+        update_request = UpdateScheduleRequest(callback_format="x")
+        scheduled_run = ScheduledRun.model_validate({**_SCHEDULE, "callback_format": "x"})
+
+        assert create_request.callback_format == "x"
+        assert update_request.callback_format == "x"
+        assert scheduled_run.callback_format == "x"
+
     def test_create_rejects_non_https_callback_url(self):
         with pytest.raises(ValidationError):
             CreateScheduleRequest(

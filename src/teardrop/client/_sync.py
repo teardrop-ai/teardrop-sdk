@@ -43,6 +43,7 @@ from teardrop.models import (
     MarketplaceBalanceResponse,
     MarketplaceCatalogDetailResponse,
     MarketplaceCatalogResponse,
+    MarketplaceDelegationQuoteResponse,
     MarketplaceEarningsByToolResponse,
     MarketplaceEarningsResponse,
     MarketplaceImportPreviewResponse,
@@ -380,6 +381,9 @@ class TeardropClient:
 
     def get_marketplace_quote(self, tool: str) -> MarketplaceQuoteResponse:
         return self._run(self._async.get_marketplace_quote(tool))
+
+    def get_marketplace_delegation_quote(self) -> MarketplaceDelegationQuoteResponse:
+        return self._run(self._async.get_marketplace_delegation_quote())
 
     def get_marketplace_catalog_detail(
         self, org_slug: str, tool_name: str

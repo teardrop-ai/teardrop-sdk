@@ -28,7 +28,7 @@ class ScheduledRun(BaseModel):
     interval_seconds: int
     enabled: bool
     callback_url: str | None = None
-    callback_format: Literal["json", "text"] | None = None
+    callback_format: Literal["json", "text", "x"] | None = None
     next_run_at: str | None
     last_run_at: str | None = None
     consecutive_failures: int
@@ -82,7 +82,7 @@ class CreateScheduleRequest(BaseModel):
     prompt: str
     interval_seconds: int = Field(ge=1)
     callback_url: str | None = None
-    callback_format: Literal["json", "text"] | None = None
+    callback_format: Literal["json", "text", "x"] | None = None
     first_run_at: str | None = None
 
     @field_validator("callback_url")
@@ -100,7 +100,7 @@ class UpdateScheduleRequest(BaseModel):
     interval_seconds: int | None = Field(default=None, ge=1)
     enabled: bool | None = None
     callback_url: str | None = None
-    callback_format: Literal["json", "text"] | None = None
+    callback_format: Literal["json", "text", "x"] | None = None
 
     @field_validator("callback_url")
     @classmethod

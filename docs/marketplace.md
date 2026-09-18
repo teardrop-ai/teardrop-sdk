@@ -298,6 +298,20 @@ quote = await client.get_marketplace_quote("acme/search")
 # quote.source: "override" | "marketplace"
 # quote.expires_at: advisory expiry matching the pricing-cache TTL
 ```
+
+### Delegation quote
+
+Public (unauthenticated) deterministic quote for the default per-delegation
+charge — the global cost cap plus the platform fee:
+
+```python
+dq = await client.get_marketplace_delegation_quote()
+# dq.max_cost_usdc: global per-delegation cost cap (atomic USDC)
+# dq.platform_fee_bps: platform fee on delegations (basis points)
+# dq.effective_max_charge_usdc: cap plus platform fee (atomic USDC)
+# dq.expires_at: advisory expiry matching the pricing-cache TTL
+# dq.currency: "USDC"
+```
 ---
 
 **Related:** [README](../README.md) · [Custom Webhook Tools](custom-tools.md) · [MCP Servers](mcp-servers.md) · [Agent Runs](agent-runs.md) · [Billing](billing.md)

@@ -19,6 +19,7 @@ from teardrop.models import (
     MarketplaceBalanceResponse,
     MarketplaceCatalogDetailResponse,
     MarketplaceCatalogResponse,
+    MarketplaceDelegationQuoteResponse,
     MarketplaceEarningsResponse,
     MarketplaceImportPreviewResponse,
     MarketplaceImportPublishResponse,
@@ -686,3 +687,81 @@ class TestMarketplaceQuote:
         )
         with pytest.raises(ValueError):
             await client.get_marketplace_quote("acme/search")
+
+
+class TestMarketplaceDelegationQuote:
+    async def test_returns_parsed_quote(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "max_cost_usdc": 1000,
+                "platform_fee_bps": 250,
+                "effective_max_charge_usdc": 1025,
+                "expires_at": "2026-01-01T00:00:00Z",
+                "currency": "USDC",
+            }
+        )
+        result = await client.get_marketplace_delegation_quote()
+        assert isinstance(result, MarketplaceDelegationQuoteResponse)
+        assert result.max_cost_usdc == 1000
+        assert result.platform_fee_bps == 250
+        assert result.effective_max_charge_usdc == 1025
+        assert result.expires_at == "2026-01-01T00:00:00Z"
+        assert result.currency == "USDC"
+
+    async def test_rejects_non_usdc_currency(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "max_cost_usdc": 1000,
+                "platform_fee_bps": 250,
+                "effective_max_charge_usdc": 1025,
+                "expires_at": "2026-01-01T00:00:00Z",
+                "currency": "USD",
+            }
+        )
+
+        with pytest.raises(ValueError):
+            await client.get_marketplace_delegation_quote()
+
+    async def test_url_and_no_auth_header(self, mock_http):
+        client = AsyncTeardropClient("http://test")
+        client._http = mock_http
+        mock_http.get.return_value = _json_response(
+            {
+                "max_cost_usdc": 1000,
+                "platform_fee_bps": 250,
+                "effective_max_charge_usdc": 1025,
+                "expires_at": "2026-01-01T00:00:00Z",
+            }
+        )
+        await client.get_marketplace_delegation_quote()
+        args, kwargs = mock_http.get.call_args
+        assert args[0] == "http://test/marketplace/delegation/quote"
+        assert "headers" not in kwargs
+
+    @pytest.mark.parametrize(
+        "field", ["max_cost_usdc", "platform_fee_bps", "effective_max_charge_usdc"]
+    )
+    async def test_missing_required_field_raises(self, client, mock_http, field):
+        body = {
+            "max_cost_usdc": 1000,
+            "platform_fee_bps": 250,
+            "effective_max_charge_usdc": 1025,
+            "expires_at": "2026-01-01T00:00:00Z",
+        }
+        body.pop(field)
+        mock_http.get.return_value = _json_response(body)
+        with pytest.raises(ValueError):
+            await client.get_marketplace_delegation_quote()
+
+    @pytest.mark.parametrize("field", ["max_cost_usdc", "effective_max_charge_usdc"])
+    async def test_rejects_out_of_range_amount(self, client, mock_http, field):
+        body = {
+            "max_cost_usdc": 1000,
+            "platform_fee_bps": 250,
+            "effective_max_charge_usdc": 1025,
+            "expires_at": "2026-01-01T00:00:00Z",
+        }
+        body[field] = 100_000_001
+        mock_http.get.return_value = _json_response(body)
+        with pytest.raises(ValueError):
+            await client.get_marketplace_delegation_quote()

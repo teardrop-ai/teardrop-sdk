@@ -19,6 +19,8 @@ from teardrop.models import (
     CreateClientCredentialsResponse,
     CreateOrgResponse,
     CreateUserResponse,
+    DiscoveryFunnelResponse,
+    MachineFunnelResponse,
     PendingSettlementsResponse,
     PossiblyDeliveredDelegationItem,
     ResolveA2ADelegationRequest,
@@ -439,3 +441,33 @@ class _AdminMixin:
         )
         self._raise_for_status(resp)
         return TelemetryCompletenessResponse.model_validate(resp.json())
+
+    async def admin_get_discovery_funnel(
+        self,
+        *,
+        days: int = 7,
+    ) -> DiscoveryFunnelResponse:
+        """Admin: aggregate discovery-stage hit counts and conversion."""
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/admin/telemetry/discovery-funnel",
+            headers=await self._headers(),
+            params={"days": days},
+        )
+        self._raise_for_status(resp)
+        return DiscoveryFunnelResponse.model_validate(resp.json())
+
+    async def admin_get_machine_funnel(
+        self,
+        *,
+        days: int = 7,
+    ) -> MachineFunnelResponse:
+        """Admin: machine-org provisioning, settlement, and payer conversion."""
+        http = await self._get_http()
+        resp = await http.get(
+            f"{self._base_url}/admin/telemetry/machine-funnel",
+            headers=await self._headers(),
+            params={"days": days},
+        )
+        self._raise_for_status(resp)
+        return MachineFunnelResponse.model_validate(resp.json())

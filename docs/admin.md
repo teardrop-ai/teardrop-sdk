@@ -59,6 +59,8 @@ with AdminTeardropClient(
 | Usage | `admin_get_usage_org(org_id, start, end)` | `GET /admin/usage/org/{org_id}` |
 | Usage | `admin_get_usage_user(user_id, start, end)` | `GET /admin/usage/{user_id}` |
 | Telemetry | `admin_get_telemetry_completeness(days)` | `GET /admin/telemetry/completeness` |
+| Telemetry | `admin_get_discovery_funnel(days)` | `GET /admin/telemetry/discovery-funnel` |
+| Telemetry | `admin_get_machine_funnel(days)` | `GET /admin/telemetry/machine-funnel` |
 
 ## Security Boundary
 

@@ -16,6 +16,7 @@ from teardrop.models import (
     EventTaskResponse,
     EventTriggerWithSecret,
     LabelingDefinitionListResponse,
+    MarketplaceDelegationQuoteResponse,
     ScheduledRun,
     ScheduledRunResult,
     ScheduledRunsPage,
@@ -240,6 +241,22 @@ class TestSyncDelegation:
         set_outcome.assert_awaited_once_with("run-1", request)
         list_exclusions.assert_awaited_once_with()
         create_exclusion.assert_awaited_once_with(exclusion_request)
+
+    def test_get_marketplace_delegation_quote(self):
+        quote = MarketplaceDelegationQuoteResponse(
+            max_cost_usdc=1000,
+            platform_fee_bps=250,
+            effective_max_charge_usdc=1025,
+            expires_at="2026-09-17T00:00:00Z",
+        )
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with patch.object(
+                client._async,
+                "get_marketplace_delegation_quote",
+                new=AsyncMock(return_value=quote),
+            ) as mock:
+                assert client.get_marketplace_delegation_quote() == quote
+                mock.assert_awaited_once_with()
 
     def test_marketplace_contract_methods_forward_required_arguments(self):
         from teardrop.models import (

@@ -15,6 +15,7 @@ from teardrop.models import (
     MarketplaceBalanceResponse,
     MarketplaceCatalogDetailResponse,
     MarketplaceCatalogResponse,
+    MarketplaceDelegationQuoteResponse,
     MarketplaceEarningsByToolResponse,
     MarketplaceEarningsResponse,
     MarketplaceImportPreviewRequest,
@@ -124,6 +125,18 @@ class _MarketplaceMixin:
         )
         self._raise_for_status(resp)
         return MarketplaceQuoteResponse.model_validate(resp.json())
+
+    async def get_marketplace_delegation_quote(self) -> MarketplaceDelegationQuoteResponse:
+        """Quote the deterministic default per-delegation charge.
+
+        Public/unauthenticated: returns the global cost cap, the platform
+        fee in basis points, and the effective max charge (cap + fee) in
+        atomic USDC, plus an advisory expiry.
+        """
+        http = await self._get_http()
+        resp = await http.get(f"{self._base_url}/marketplace/delegation/quote")
+        self._raise_for_status(resp)
+        return MarketplaceDelegationQuoteResponse.model_validate(resp.json())
 
     async def get_marketplace_catalog(
         self,
