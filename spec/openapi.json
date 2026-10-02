@@ -982,6 +982,92 @@
         "title": "BillingPricingResponse",
         "type": "object"
       },
+      "CalibrationBin": {
+        "properties": {
+          "bin": {
+            "title": "Bin",
+            "type": "integer"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "lower": {
+            "title": "Lower",
+            "type": "number"
+          },
+          "mean_probability": {
+            "title": "Mean Probability",
+            "type": "number"
+          },
+          "observed_frequency": {
+            "title": "Observed Frequency",
+            "type": "number"
+          },
+          "upper": {
+            "title": "Upper",
+            "type": "number"
+          }
+        },
+        "required": [
+          "bin",
+          "lower",
+          "upper",
+          "count",
+          "mean_probability",
+          "observed_frequency"
+        ],
+        "title": "CalibrationBin",
+        "type": "object"
+      },
+      "ChargeReconciliationResponse": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/ReconciliationCheckResponse"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "ledger_mcp_revenue_usdc": {
+            "title": "Ledger Mcp Revenue Usdc",
+            "type": "integer"
+          },
+          "ledger_revenue_usdc": {
+            "title": "Ledger Revenue Usdc",
+            "type": "integer"
+          },
+          "legacy_revenue_usdc": {
+            "title": "Legacy Revenue Usdc",
+            "type": "integer"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "ok",
+          "checks",
+          "legacy_revenue_usdc",
+          "ledger_revenue_usdc",
+          "ledger_mcp_revenue_usdc"
+        ],
+        "title": "ChargeReconciliationResponse",
+        "type": "object"
+      },
       "CompleteWithdrawalRequest": {
         "properties": {
           "tx_hash": {
@@ -1071,6 +1157,16 @@
           "org_id": {
             "title": "Org Id",
             "type": "string"
+          },
+          "scope": {
+            "default": "publish",
+            "enum": [
+              "read",
+              "publish",
+              "withdraw"
+            ],
+            "title": "Scope",
+            "type": "string"
           }
         },
         "required": [
@@ -1098,12 +1194,18 @@
           "org_id": {
             "title": "Org Id",
             "type": "string"
+          },
+          "scope": {
+            "description": "Granted scope: read, publish, or withdraw.",
+            "title": "Scope",
+            "type": "string"
           }
         },
         "required": [
           "client_id",
           "client_secret",
           "org_id",
+          "scope",
           "created_at"
         ],
         "title": "CreateClientCredentialsResponse",
@@ -1316,11 +1418,18 @@
             "title": "Auth Header Value"
           },
           "base_price_usdc": {
-            "default": 0,
-            "maximum": 100000000.0,
-            "minimum": 0.0,
-            "title": "Base Price Usdc",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 100000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Atomic USDC per call; null = platform default, 0 = free.",
+            "title": "Base Price Usdc"
           },
           "category": {
             "default": "",
@@ -1643,6 +1752,16 @@
             "title": "Mcp 402 Challenges",
             "type": "integer"
           },
+          "mcp_402_no_payment": {
+            "default": 0,
+            "title": "Mcp 402 No Payment",
+            "type": "integer"
+          },
+          "mcp_402_payment_invalid": {
+            "default": 0,
+            "title": "Mcp 402 Payment Invalid",
+            "type": "integer"
+          },
           "mcp_server_card_hits": {
             "default": 0,
             "title": "Mcp Server Card Hits",
@@ -1706,6 +1825,16 @@
           "mcp_402_challenges": {
             "default": 0,
             "title": "Mcp 402 Challenges",
+            "type": "integer"
+          },
+          "mcp_402_no_payment": {
+            "default": 0,
+            "title": "Mcp 402 No Payment",
+            "type": "integer"
+          },
+          "mcp_402_payment_invalid": {
+            "default": 0,
+            "title": "Mcp 402 Payment Invalid",
             "type": "integer"
           },
           "mcp_server_card_hits": {
@@ -2600,6 +2729,47 @@
         "title": "LabelingResultListResponse",
         "type": "object"
       },
+      "LeaderboardResponse": {
+        "properties": {
+          "definition_key": {
+            "title": "Definition Key",
+            "type": "string"
+          },
+          "definition_sha256": {
+            "title": "Definition Sha256",
+            "type": "string"
+          },
+          "definition_version": {
+            "title": "Definition Version",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScorecardItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "min_sample": {
+            "title": "Min Sample",
+            "type": "integer"
+          },
+          "window_days": {
+            "title": "Window Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "definition_key",
+          "definition_version",
+          "definition_sha256",
+          "window_days",
+          "min_sample",
+          "items"
+        ],
+        "title": "LeaderboardResponse",
+        "type": "object"
+      },
       "LinkWalletRequest": {
         "properties": {
           "siwe_message": {
@@ -2948,6 +3118,81 @@
         "title": "MarketplaceAgentDirectoryResponse",
         "type": "object"
       },
+      "MarketplaceAgentRegistrationCheck": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "warn",
+              "fail"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "detail"
+        ],
+        "title": "MarketplaceAgentRegistrationCheck",
+        "type": "object"
+      },
+      "MarketplaceAgentRegistrationPreviewResponse": {
+        "properties": {
+          "agent_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Url"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The error PUT would return; null when registrable.",
+            "title": "Detail"
+          },
+          "price_per_task_usdc": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Per Task Usdc"
+          },
+          "registrable": {
+            "title": "Registrable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "registrable"
+        ],
+        "title": "MarketplaceAgentRegistrationPreviewResponse",
+        "type": "object"
+      },
       "MarketplaceAgentRegistrationRequest": {
         "properties": {
           "agent_url": {
@@ -2989,6 +3234,38 @@
           "updated_at"
         ],
         "title": "MarketplaceAgentRegistrationResponse",
+        "type": "object"
+      },
+      "MarketplaceAgentRegistrationTestResponse": {
+        "properties": {
+          "agent_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Url"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/MarketplaceAgentRegistrationCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "passed",
+          "checks"
+        ],
+        "title": "MarketplaceAgentRegistrationTestResponse",
         "type": "object"
       },
       "MarketplaceAgentSummary": {
@@ -3807,11 +4084,18 @@
       "MarketplaceImportPublishToolRequest": {
         "properties": {
           "base_price_usdc": {
-            "default": 0,
-            "maximum": 100000000.0,
-            "minimum": 0.0,
-            "title": "Base Price Usdc",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 100000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Atomic USDC per call; null = platform default, 0 = free.",
+            "title": "Base Price Usdc"
           },
           "category": {
             "default": "",
@@ -3895,8 +4179,15 @@
       "MarketplaceImportPublishedTool": {
         "properties": {
           "base_price_usdc": {
-            "title": "Base Price Usdc",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Price Usdc"
           },
           "id": {
             "title": "Id",
@@ -4093,6 +4384,7 @@
             "type": "string"
           },
           "cost_usdc": {
+            "description": "Effective per-call price in atomic USDC, as billed.",
             "title": "Cost Usdc",
             "type": "integer"
           },
@@ -4122,13 +4414,34 @@
             "title": "Name",
             "type": "string"
           },
+          "output_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "JSON Schema of the tool result, when declared.",
+            "title": "Output Schema"
+          },
           "qualified_name": {
             "title": "Qualified Name",
             "type": "string"
           },
           "reputation_score": {
-            "title": "Reputation Score",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the tool is unrated.",
+            "title": "Reputation Score"
           },
           "short_description": {
             "description": "Internal/short description.",
@@ -4136,8 +4449,16 @@
             "type": "string"
           },
           "success_rate": {
-            "title": "Success Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Posterior success estimate; null when the tool is unrated.",
+            "title": "Success Rate"
           },
           "tool_name": {
             "title": "Tool Name",
@@ -4639,6 +4960,12 @@
           "require_x402": {
             "title": "Require X402",
             "type": "boolean"
+          },
+          "source": {
+            "default": "admin",
+            "description": "admin or self_serve",
+            "title": "Source",
+            "type": "string"
           }
         },
         "required": [
@@ -4687,6 +5014,12 @@
           "require_x402": {
             "title": "Require X402",
             "type": "boolean"
+          },
+          "source": {
+            "default": "admin",
+            "description": "admin or self_serve",
+            "title": "Source",
+            "type": "string"
           }
         },
         "required": [
@@ -4710,7 +5043,7 @@
           },
           "jwt_forward": {
             "default": false,
-            "description": "Forward caller JWT as Authorization header to this agent",
+            "description": "Forward caller JWT as Authorization header (org admins only)",
             "title": "Jwt Forward",
             "type": "boolean"
           },
@@ -4728,13 +5061,14 @@
           },
           "max_cost_usdc": {
             "default": 0,
-            "description": "Per-delegation cost cap in atomic USDC (0 = global default)",
+            "description": "Per-delegation cost cap in atomic USDC (0 = global default, or the self-serve maximum for members)",
+            "minimum": 0.0,
             "title": "Max Cost Usdc",
             "type": "integer"
           },
           "require_x402": {
             "default": false,
-            "description": "Require x402 payment for this agent",
+            "description": "Require x402 payment for this agent (always true for members)",
             "title": "Require X402",
             "type": "boolean"
           }
@@ -4743,6 +5077,26 @@
           "agent_url"
         ],
         "title": "OrgCreateA2AAgentRequest",
+        "type": "object"
+      },
+      "OrgCredentialDisableResponse": {
+        "properties": {
+          "client_id": {
+            "description": "M2M client ID that was disabled.",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "disabled_at": {
+            "description": "ISO 8601 timestamp of the disable.",
+            "title": "Disabled At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "disabled_at"
+        ],
+        "title": "OrgCredentialDisableResponse",
         "type": "object"
       },
       "OrgCredentialItem": {
@@ -4755,6 +5109,24 @@
           "created_at": {
             "description": "ISO 8601 timestamp the credential was created/rotated.",
             "title": "Created At",
+            "type": "string"
+          },
+          "disabled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ISO 8601 timestamp of disable, or null if active.",
+            "title": "Disabled At"
+          },
+          "scope": {
+            "default": "publish",
+            "description": "Granted scope: read, publish, or withdraw.",
+            "title": "Scope",
             "type": "string"
           }
         },
@@ -4781,11 +5153,17 @@
             "description": "ISO 8601 timestamp of this rotation.",
             "title": "Created At",
             "type": "string"
+          },
+          "scope": {
+            "description": "Granted scope: read, publish, or withdraw.",
+            "title": "Scope",
+            "type": "string"
           }
         },
         "required": [
           "client_id",
           "client_secret",
+          "scope",
           "created_at"
         ],
         "title": "OrgCredentialRegenerateResponse",
@@ -4827,8 +5205,15 @@
       "OrgToolResponse": {
         "properties": {
           "base_price_usdc": {
-            "title": "Base Price Usdc",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Price Usdc"
           },
           "category": {
             "title": "Category",
@@ -5214,6 +5599,230 @@
         "title": "PossiblyDeliveredDelegationItem",
         "type": "object"
       },
+      "PredictionProofAnchor": {
+        "properties": {
+          "anchor_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Address"
+          },
+          "anchored_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchored At"
+          },
+          "audit_path": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Audit Path",
+            "type": "array"
+          },
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "block_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Number"
+          },
+          "chain_id": {
+            "title": "Chain Id",
+            "type": "integer"
+          },
+          "leaf_index": {
+            "title": "Leaf Index",
+            "type": "integer"
+          },
+          "merkle_root": {
+            "title": "Merkle Root",
+            "type": "string"
+          },
+          "tree_size": {
+            "title": "Tree Size",
+            "type": "integer"
+          },
+          "tx_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tx Hash"
+          }
+        },
+        "required": [
+          "batch_id",
+          "leaf_index",
+          "tree_size",
+          "merkle_root",
+          "audit_path",
+          "chain_id",
+          "tx_hash",
+          "anchor_address",
+          "block_number",
+          "anchored_at"
+        ],
+        "title": "PredictionProofAnchor",
+        "type": "object"
+      },
+      "PredictionProofResponse": {
+        "properties": {
+          "anchor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictionProofAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hash_algorithm": {
+            "const": "rfc6962-sha256",
+            "title": "Hash Algorithm",
+            "type": "string"
+          },
+          "leaf_preimage": {
+            "additionalProperties": true,
+            "title": "Leaf Preimage",
+            "type": "object"
+          },
+          "leaf_sha256": {
+            "title": "Leaf Sha256",
+            "type": "string"
+          },
+          "leaf_version": {
+            "title": "Leaf Version",
+            "type": "integer"
+          },
+          "prediction_id": {
+            "title": "Prediction Id",
+            "type": "string"
+          },
+          "salt": {
+            "title": "Salt",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "submitted",
+              "anchored"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prediction_id",
+          "status",
+          "hash_algorithm",
+          "leaf_version",
+          "leaf_preimage",
+          "salt",
+          "leaf_sha256",
+          "anchor"
+        ],
+        "title": "PredictionProofResponse",
+        "type": "object"
+      },
+      "PredictionSubmitRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "definition_key": {
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$",
+            "title": "Definition Key",
+            "type": "string"
+          },
+          "definition_version": {
+            "exclusiveMinimum": 0.0,
+            "title": "Definition Version",
+            "type": "integer"
+          },
+          "idempotency_key": {
+            "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "predictions": {
+            "additionalProperties": true,
+            "title": "Predictions",
+            "type": "object"
+          },
+          "signature": {
+            "pattern": "^0x[0-9a-fA-F]{130}$",
+            "title": "Signature",
+            "type": "string"
+          },
+          "signer_address": {
+            "pattern": "^0x[0-9a-fA-F]{40}$",
+            "title": "Signer Address",
+            "type": "string"
+          }
+        },
+        "required": [
+          "definition_key",
+          "definition_version",
+          "idempotency_key",
+          "signer_address",
+          "signature",
+          "predictions"
+        ],
+        "title": "PredictionSubmitRequest",
+        "type": "object"
+      },
+      "PredictionSubmitResponse": {
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "payload_sha256": {
+            "title": "Payload Sha256",
+            "type": "string"
+          },
+          "status": {
+            "const": "accepted",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "payload_sha256",
+          "status",
+          "created"
+        ],
+        "title": "PredictionSubmitResponse",
+        "type": "object"
+      },
       "PricingRuleWithOverrides": {
         "properties": {
           "created_at": {
@@ -5415,6 +6024,48 @@
           "average_latency_ms"
         ],
         "title": "PublicToolReputation",
+        "type": "object"
+      },
+      "ReconciliationCheckResponse": {
+        "properties": {
+          "discrepancies": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Discrepancies",
+            "type": "object"
+          },
+          "info": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Info",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sample_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sample Ids",
+            "type": "array"
+          },
+          "source_rows": {
+            "title": "Source Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "source_rows",
+          "discrepancies",
+          "info",
+          "sample_ids"
+        ],
+        "title": "ReconciliationCheckResponse",
         "type": "object"
       },
       "RefreshRequest": {
@@ -6036,6 +6687,199 @@
           "status"
         ],
         "title": "ScoreResult",
+        "type": "object"
+      },
+      "ScorecardItem": {
+        "properties": {
+          "accuracy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accuracy"
+          },
+          "adjusted_brier": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjusted Brier"
+          },
+          "calibration": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CalibrationBin"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibration"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "eligible": {
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "mean_brier": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Brier"
+          },
+          "n_scored": {
+            "title": "N Scored",
+            "type": "integer"
+          },
+          "platform_attested": {
+            "title": "Platform Attested",
+            "type": "boolean"
+          },
+          "rounds_expected": {
+            "title": "Rounds Expected",
+            "type": "integer"
+          },
+          "rounds_submitted": {
+            "title": "Rounds Submitted",
+            "type": "integer"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "unresolved": {
+            "title": "Unresolved",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "subject",
+          "platform_attested",
+          "eligible",
+          "n_scored",
+          "rounds_submitted",
+          "rounds_expected",
+          "coverage",
+          "unresolved",
+          "mean_brier",
+          "adjusted_brier",
+          "accuracy"
+        ],
+        "title": "ScorecardItem",
+        "type": "object"
+      },
+      "ScorecardResponse": {
+        "properties": {
+          "definition_key": {
+            "title": "Definition Key",
+            "type": "string"
+          },
+          "definition_sha256": {
+            "title": "Definition Sha256",
+            "type": "string"
+          },
+          "definition_version": {
+            "title": "Definition Version",
+            "type": "integer"
+          },
+          "item": {
+            "$ref": "#/components/schemas/ScorecardItem"
+          },
+          "min_sample": {
+            "title": "Min Sample",
+            "type": "integer"
+          },
+          "window_days": {
+            "title": "Window Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "definition_key",
+          "definition_version",
+          "definition_sha256",
+          "window_days",
+          "min_sample",
+          "item"
+        ],
+        "title": "ScorecardResponse",
+        "type": "object"
+      },
+      "ScorecardTask": {
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          },
+          "definition_key": {
+            "title": "Definition Key",
+            "type": "string"
+          },
+          "definition_sha256": {
+            "title": "Definition Sha256",
+            "type": "string"
+          },
+          "definition_version": {
+            "title": "Definition Version",
+            "type": "integer"
+          },
+          "prediction_schema": {
+            "additionalProperties": true,
+            "title": "Prediction Schema",
+            "type": "object"
+          }
+        },
+        "required": [
+          "definition_key",
+          "definition_version",
+          "definition_sha256",
+          "prediction_schema",
+          "config"
+        ],
+        "title": "ScorecardTask",
+        "type": "object"
+      },
+      "ScorecardTaskListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScorecardTask"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ScorecardTaskListResponse",
         "type": "object"
       },
       "SetAuthorConfigRequest": {
@@ -7102,6 +7946,7 @@
                 "type": "null"
               }
             ],
+            "description": "Send null to revert to the platform default price.",
             "title": "Base Price Usdc"
           },
           "category": {
@@ -7691,7 +8536,7 @@
   "info": {
     "description": "The open API and billing gateway for autonomous economic agents",
     "title": "Teardrop",
-    "version": "1.6.0"
+    "version": "2.6.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -7909,7 +8754,7 @@
         ]
       },
       "post": {
-        "description": "Add a trusted A2A agent to the authenticated org's allowlist.\n\nRestricted to org admins: an allowlist entry exposes an arbitrary URL to the\nagent's delegate_to_agent tool (and, with jwt_forward, replays the caller's\nJWT to that endpoint), so registration is a privileged org-configuration\naction rather than a member-level one.",
+        "description": "Add a trusted A2A agent to the authenticated org's allowlist.\n\nOrg admins may add any URL with any settings. Other members may add only an\nagent listed in the marketplace registry; those rows are forced to x402-only\npayment, no JWT forwarding, and a cap within the global delegation limit.",
         "operationId": "add_a2a_agent_a2a_agents_post",
         "requestBody": {
           "content": {
@@ -7956,7 +8801,7 @@
     },
     "/a2a/agents/{agent_id}": {
       "delete": {
-        "description": "Remove an A2A agent from the authenticated org's allowlist (org admins only).",
+        "description": "Remove an A2A agent from the org's allowlist (members may remove only self-serve entries).",
         "operationId": "delete_a2a_agent_a2a_agents__agent_id__delete",
         "parameters": [
           {
@@ -8321,6 +9166,84 @@
         "tags": [
           "Admin",
           "Admin / A2A"
+        ]
+      }
+    },
+    "/admin/billing/charges/reconciliation": {
+      "get": {
+        "description": "Compare the unified charge ledger with legacy billing records (admin only).\n\n``ok`` is true only when every check reports zero discrepancies over a window\nthat starts after migration 115 was deployed.",
+        "operationId": "admin_charge_reconciliation_admin_billing_charges_reconciliation_get",
+        "parameters": [
+          {
+            "description": "Window start (ISO 8601; UTC when no offset). Defaults to 24h before end.",
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Window start (ISO 8601; UTC when no offset). Defaults to 24h before end.",
+              "title": "Start"
+            }
+          },
+          {
+            "description": "Exclusive window end (ISO 8601). Defaults to 5 minutes ago.",
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exclusive window end (ISO 8601). Defaults to 5 minutes ago.",
+              "title": "End"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargeReconciliationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Charge Reconciliation",
+        "tags": [
+          "Admin",
+          "Admin / Billing"
         ]
       }
     },
@@ -11767,6 +12690,111 @@
         "tags": [
           "Labeling"
         ]
+      },
+      "post": {
+        "description": "Commit a signed external prediction; the server assigns its timestamp.",
+        "operationId": "submit_labeling_prediction_labeling_predictions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PredictionSubmitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotent replay of an existing submission."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictionSubmitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Signature does not match the canonical payload."
+          },
+          "403": {
+            "description": "Signer wallet is not linked to the organization."
+          },
+          "409": {
+            "description": "Idempotency key was reused with a different payload."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Submit Labeling Prediction",
+        "tags": [
+          "Labeling"
+        ]
+      }
+    },
+    "/labeling/predictions/{prediction_id}/proof": {
+      "get": {
+        "description": "Return the commitment leaf and, once sealed, its Merkle inclusion proof and anchor.",
+        "operationId": "get_labeling_prediction_proof_labeling_predictions__prediction_id__proof_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "prediction_id",
+            "required": true,
+            "schema": {
+              "title": "Prediction Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictionProofResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Labeling Prediction Proof",
+        "tags": [
+          "Labeling"
+        ]
       }
     },
     "/labeling/results": {
@@ -12058,6 +13086,100 @@
           }
         ],
         "summary": "Set Marketplace Agent Registration",
+        "tags": [
+          "Marketplace"
+        ]
+      }
+    },
+    "/marketplace/agent-registration/preview": {
+      "post": {
+        "description": "Dry-run agent registration: same validation verdict as PUT, with a fresh card fetch and no writes.",
+        "operationId": "preview_marketplace_agent_registration_marketplace_agent_registration_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketplaceAgentRegistrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketplaceAgentRegistrationPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Marketplace Agent Registration",
+        "tags": [
+          "Marketplace"
+        ]
+      }
+    },
+    "/marketplace/agent-registration/test": {
+      "post": {
+        "description": "Check an agent endpoint with one unpaid, unbilled message. Priced agents must answer 402; nothing is signed.",
+        "operationId": "check_marketplace_agent_registration_marketplace_agent_registration_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketplaceAgentRegistrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketplaceAgentRegistrationTestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Marketplace Agent Registration",
         "tags": [
           "Marketplace"
         ]
@@ -13504,7 +14626,8 @@
     },
     "/mcp/v1": {
       "post": {
-        "description": "MCP Streamable HTTP endpoint \u2014 JSON-RPC 2.0.\n\nImplements the following MCP methods:\n  - ``initialize`` \u2013 returns server capabilities\n  - ``tools/list`` \u2013 returns available tool definitions with pricing\n  - ``tools/call`` \u2013 execute a tool (subject to billing gate)",
+        "deprecated": true,
+        "description": "Deprecated MCP JSON-RPC 2.0 endpoint; use ``POST /tools/mcp``.",
         "operationId": "mcp_jsonrpc_handler_mcp_v1_post",
         "responses": {
           "200": {
@@ -13832,8 +14955,25 @@
     },
     "/org/credentials/regenerate": {
       "post": {
-        "description": "Rotate org M2M credentials for an admin or machine-org SIWE owner.\n\nThe operation destroys every existing machine credential and reveals the\nreplacement secret exactly once, so ordinary members and client credentials\ncannot invoke it.",
+        "description": "Rotate org M2M credentials for an admin or machine-org SIWE owner.\n\nThe operation destroys every existing machine credential and reveals the\nreplacement secret exactly once, so ordinary members and client credentials\ncannot invoke it. ``scope`` selects the replacement credential's capability.",
         "operationId": "regenerate_org_credentials_org_credentials_regenerate_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "publish",
+              "enum": [
+                "read",
+                "publish",
+                "withdraw"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -13844,6 +14984,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -13852,6 +15002,54 @@
           }
         ],
         "summary": "Regenerate Org Credentials",
+        "tags": [
+          "Credentials"
+        ]
+      }
+    },
+    "/org/credentials/{client_id}/disable": {
+      "post": {
+        "description": "Disable a single M2M credential for an org (admin or owning SIWE wallet).\n\nIdempotent within the caller's org: re-disabling returns 200 with the\noriginal timestamp. Unknown or foreign-org credentials return 404.\nTokens minted from this credential are rejected on every authenticated\npath (REST, MCP, A2A) even before the JWT expires.",
+        "operationId": "disable_org_credential_org_credentials__client_id__disable_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgCredentialDisableResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Disable Org Credential",
         "tags": [
           "Credentials"
         ]
@@ -14116,6 +15314,168 @@
         "summary": "Register Via Invite",
         "tags": [
           "Auth"
+        ]
+      }
+    },
+    "/scorecards/tasks": {
+      "get": {
+        "description": "List pre-registered public tasks with a hash of each immutable definition.",
+        "operationId": "list_scorecard_tasks_scorecards_tasks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScorecardTaskListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Scorecard Tasks",
+        "tags": [
+          "Scorecards"
+        ]
+      }
+    },
+    "/scorecards/{definition_key}/{definition_version}": {
+      "get": {
+        "description": "Rank subjects meeting the task's minimum sample by coverage-adjusted Brier score (lower is better).",
+        "operationId": "get_scorecard_leaderboard_scorecards__definition_key___definition_version__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "definition_key",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$",
+              "title": "Definition Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "definition_version",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 1000000,
+              "title": "Definition Version",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "window_days",
+            "required": false,
+            "schema": {
+              "default": 90,
+              "title": "Window Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaderboardResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Scorecard Leaderboard",
+        "tags": [
+          "Scorecards"
+        ]
+      }
+    },
+    "/scorecards/{definition_key}/{definition_version}/{subject}": {
+      "get": {
+        "description": "One subject's scorecard; metrics and calibration are withheld below the minimum sample.",
+        "operationId": "get_subject_scorecard_scorecards__definition_key___definition_version___subject__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "definition_key",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z0-9][a-z0-9_.-]{0,127}$",
+              "title": "Definition Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "definition_version",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 1000000,
+              "title": "Definition Version",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subject",
+            "required": true,
+            "schema": {
+              "pattern": "^(0x[0-9a-f]{40}|schedule:[A-Za-z0-9_-]{1,128})$",
+              "title": "Subject",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "window_days",
+            "required": false,
+            "schema": {
+              "default": 90,
+              "title": "Window Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScorecardResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Subject Scorecard",
+        "tags": [
+          "Scorecards"
         ]
       }
     },
