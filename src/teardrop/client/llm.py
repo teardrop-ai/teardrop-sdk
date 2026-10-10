@@ -43,6 +43,8 @@ class _LlmMixin:
         model: str,
         routing_preference: str = "default",
         api_key: str | None = _UNSET,
+        reasoning_effort: str | None = _UNSET,
+        model_reasoning_effort: dict[str, str] = _UNSET,
         api_base: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.0,
@@ -59,10 +61,16 @@ class _LlmMixin:
         )
         if api_key is not _UNSET:
             req_kwargs["api_key"] = api_key
+        if reasoning_effort is not _UNSET:
+            req_kwargs["reasoning_effort"] = reasoning_effort
+        if model_reasoning_effort is not _UNSET:
+            req_kwargs["model_reasoning_effort"] = model_reasoning_effort
         request = SetLlmConfigRequest(**req_kwargs)
-        body = request.model_dump(exclude_none=True)
+        body = request.model_dump(exclude_none=True, exclude_unset=True)
         if "api_key" in request.model_fields_set and request.api_key is None:
             body["api_key"] = None
+        if "reasoning_effort" in request.model_fields_set and request.reasoning_effort is None:
+            body["reasoning_effort"] = None
 
         async with self._llm_config_lock:
             http = await self._get_http()

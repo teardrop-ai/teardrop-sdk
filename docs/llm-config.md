@@ -29,14 +29,24 @@ config = await client.set_llm_config(
     max_tokens=4096,                               # 1–200,000
     temperature=0.0,                               # 0.0–2.0
     timeout_seconds=120,
+    reasoning_effort="high",
+    model_reasoning_effort={
+        "openrouter:~anthropic/claude-opus-latest": "high",
+    },
 )
 ```
 
 **Notes**:
-- Pass `api_key=None` (or omit) to preserve an existing stored key.
+- Omit `api_key` to preserve an existing stored key; passing `api_key=None` sends JSON `null`.
 - When `api_key` is provided, it is encrypted at rest and never returned (only `has_api_key: true` is visible).
 - `api_base` is validated for SSRF; private IPs are rejected unless the backend explicitly allows them.
 - `routing_preference="cost"` enables smart routing to find the cheapest model in a pool.
+- `reasoning_effort` sets the org-wide reasoning level (`none`, `minimal`, `low`,
+  `medium`, or `high`); omit it to use each model's platform default.
+- `model_reasoning_effort` maps `provider:model` keys to per-model overrides and
+  takes precedence over the org-wide value, including for smart-routed models.
+- Omitted reasoning fields remain absent from the update body; explicitly
+  passing `reasoning_effort=None` sends JSON `null`.
 - Cache is invalidated on successful update.
 
 To remove a stored BYOK key while keeping the provider and model configuration,

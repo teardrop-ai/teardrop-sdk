@@ -19,6 +19,7 @@ from teardrop.client._sync import TeardropClient
 from teardrop.client.event_triggers import EventTriggersModule, _SyncEventTriggersModule
 from teardrop.client.labeling import LabelingModule, _SyncLabelingModule
 from teardrop.client.schedules import SchedulesModule, _SyncSchedulesModule
+from teardrop.client.scorecards import ScorecardsModule, _SyncScorecardsModule
 
 AsyncTeardropClient.__module__ = __name__
 AsyncAdminTeardropClient.__module__ = __name__
@@ -28,6 +29,8 @@ SchedulesModule.__module__ = __name__
 EventTriggersModule.__module__ = __name__
 _SyncSchedulesModule.__module__ = __name__
 _SyncEventTriggersModule.__module__ = __name__
+ScorecardsModule.__module__ = __name__
+_SyncScorecardsModule.__module__ = __name__
 _HttpProxy.__module__ = __name__
 
 __all__ = [
@@ -38,10 +41,12 @@ __all__ = [
     "SchedulesModule",
     "EventTriggersModule",
     "LabelingModule",
+    "ScorecardsModule",
     "httpx",
     "_SyncSchedulesModule",
     "_SyncEventTriggersModule",
     "_SyncLabelingModule",
+    "_SyncScorecardsModule",
     "_HttpProxy",
     "_parse_list_response",
     "_parse_scheduled_runs_page",

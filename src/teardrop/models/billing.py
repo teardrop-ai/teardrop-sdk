@@ -279,3 +279,25 @@ class ToolPricingDeleteResponse(BaseModel):
 
     tool_name: str
     deleted: bool
+
+
+class ReconciliationCheckResponse(BaseModel):
+    """A single check in the admin charge reconciliation report."""
+
+    name: str
+    source_rows: int
+    discrepancies: dict[str, int]
+    info: dict[str, int]
+    sample_ids: list[str]
+
+
+class ChargeReconciliationResponse(BaseModel):
+    """Reconcile unified charge-ledger rows against legacy billing records."""
+
+    start: str
+    end: str
+    ok: bool
+    checks: list[ReconciliationCheckResponse]
+    legacy_revenue_usdc: int
+    ledger_revenue_usdc: int
+    ledger_mcp_revenue_usdc: int

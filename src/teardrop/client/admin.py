@@ -15,6 +15,7 @@ from teardrop.models import (
     AdminCreateUserRequest,
     AdminTopupRequest,
     AdminTopupResponse,
+    ChargeReconciliationResponse,
     CompleteWithdrawalRequest,
     CreateClientCredentialsResponse,
     CreateOrgResponse,
@@ -161,6 +162,27 @@ class _AdminMixin:
         )
         self._raise_for_status(resp)
         return RevenueSummaryResponse.model_validate(resp.json())
+
+    async def admin_get_charge_reconciliation(
+        self,
+        *,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> ChargeReconciliationResponse:
+        """Compare the charge ledger with legacy billing records."""
+        http = await self._get_http()
+        params: dict[str, Any] = {}
+        if start is not None:
+            params["start"] = start
+        if end is not None:
+            params["end"] = end
+        resp = await http.get(
+            f"{self._base_url}/admin/billing/charges/reconciliation",
+            headers=await self._headers(),
+            params=params or None,
+        )
+        self._raise_for_status(resp)
+        return ChargeReconciliationResponse.model_validate(resp.json())
 
     async def admin_topup_credits(self, request: AdminTopupRequest) -> AdminTopupResponse:
         http = await self._get_http()

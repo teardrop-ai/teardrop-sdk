@@ -40,6 +40,9 @@ class MarketplaceToolSummary(BaseModel):
     description: str
     short_description: str
     input_schema: dict[str, Any]
+    output_schema: dict[str, Any] | None = Field(
+        default=None, description="JSON Schema of the tool result, when declared."
+    )
     cost_usdc: int
     tool_type: str
     category: str
@@ -550,3 +553,30 @@ class MarketplaceAgentRegistrationResponse(BaseModel):
     updated_at: str
 
     model_config = {"extra": "allow"}
+
+
+class MarketplaceAgentRegistrationCheck(BaseModel):
+    """One diagnostic check from an agent-registration test."""
+
+    name: str
+    status: Literal["pass", "warn", "fail"]
+    detail: str
+
+
+class MarketplaceAgentRegistrationPreviewResponse(BaseModel):
+    """No-write registration validation result."""
+
+    registrable: bool
+    agent_url: str | None = None
+    price_per_task_usdc: int | None = None
+    detail: str | None = Field(
+        default=None, description="The error PUT would return; null when registrable."
+    )
+
+
+class MarketplaceAgentRegistrationTestResponse(BaseModel):
+    """One unpaid, unbilled endpoint probe and its diagnostic checks."""
+
+    passed: bool
+    checks: list[MarketplaceAgentRegistrationCheck]
+    agent_url: str | None = None

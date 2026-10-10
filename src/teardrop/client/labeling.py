@@ -12,6 +12,9 @@ from teardrop.models import (
     LabelingOverrideResponse,
     LabelingPredictionListResponse,
     LabelingResultListResponse,
+    PredictionProofResponse,
+    PredictionSubmitRequest,
+    PredictionSubmitResponse,
     ScoreResult,
 )
 
@@ -48,6 +51,31 @@ class LabelingModule:
 
     async def list_predictions(self, *, limit: int = 50) -> LabelingPredictionListResponse:
         return await self.get_predictions(limit=limit)
+
+    async def submit_prediction(
+        self, request: PredictionSubmitRequest
+    ) -> PredictionSubmitResponse | None:
+        """Submit a signed prediction; 200 responses are idempotent replays."""
+        http = await self._c._get_http()
+        resp = await http.post(
+            f"{self._c._base_url}/labeling/predictions",
+            json=request.model_dump(),
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        if resp.status_code == 200:
+            return None
+        return PredictionSubmitResponse.model_validate(resp.json())
+
+    async def get_prediction_proof(self, prediction_id: str) -> PredictionProofResponse:
+        """Get the commitment proof; an anchor may be absent until the batch is sealed."""
+        http = await self._c._get_http()
+        resp = await http.get(
+            f"{self._c._base_url}/labeling/predictions/{_quote_path_segment(prediction_id)}/proof",
+            headers=await self._c._headers(),
+        )
+        self._c._raise_for_status(resp)
+        return PredictionProofResponse.model_validate(resp.json())
 
     async def get_results(self, *, limit: int = 50) -> LabelingResultListResponse:
         http = await self._c._get_http()
@@ -108,6 +136,14 @@ class _SyncLabelingModule:
 
     def list_predictions(self, *, limit: int = 50) -> LabelingPredictionListResponse:
         return self._c._run(self._c._async.labeling.list_predictions(limit=limit))
+
+    def submit_prediction(
+        self, request: PredictionSubmitRequest
+    ) -> PredictionSubmitResponse | None:
+        return self._c._run(self._c._async.labeling.submit_prediction(request))
+
+    def get_prediction_proof(self, prediction_id: str) -> PredictionProofResponse:
+        return self._c._run(self._c._async.labeling.get_prediction_proof(prediction_id))
 
     def get_results(self, *, limit: int = 50) -> LabelingResultListResponse:
         return self._c._run(self._c._async.labeling.get_results(limit=limit))

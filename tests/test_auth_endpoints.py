@@ -7,8 +7,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from teardrop.client import AsyncTeardropClient
-from teardrop.exceptions import AuthenticationError, ConflictError, ValidationError
+from teardrop.exceptions import (
+    AuthenticationError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
 from teardrop.models import (
+    OrgCredentialDisableResponse,
     PrincipalSpendLimitRequest,
     PrincipalSpendLimitResponse,
     ResendVerificationResponse,
@@ -345,6 +351,29 @@ class TestSetOrgPrincipalSpendLimit:
         args, kwargs = mock_http.put.call_args
         assert args[0] == "http://test/org/principals/p-1/spend-limit"
         assert kwargs["json"] == {"daily_limit_usdc": 2500, "is_paused": True}
+
+
+class TestDisableOrgCredential:
+    async def test_disables_quoted_credential_id(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "client_id": "client/id",
+                "disabled_at": "2026-07-18T00:00:00Z",
+            }
+        )
+
+        result = await client.disable_org_credential("client/id")
+
+        assert isinstance(result, OrgCredentialDisableResponse)
+        assert result.disabled_at == "2026-07-18T00:00:00Z"
+        assert mock_http.post.call_args.args[0] == "http://test/org/credentials/client%2Fid/disable"
+        assert "json" not in mock_http.post.call_args.kwargs
+
+    async def test_unknown_credential_uses_existing_not_found_mapping(self, client, mock_http):
+        mock_http.post.return_value = _json_response({"detail": "Not found"}, status=404)
+
+        with pytest.raises(NotFoundError):
+            await client.disable_org_credential("unknown")
 
     async def test_none_fields_excluded(self, client, mock_http):
         mock_http.put.return_value = _json_response(

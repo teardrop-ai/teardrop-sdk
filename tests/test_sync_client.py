@@ -110,6 +110,39 @@ class TestSyncDelegation:
             timeout_seconds=120,
         )
 
+    def test_set_llm_config_forwards_reasoning_fields(self):
+        from teardrop.models import LlmConfigResponse
+
+        response = LlmConfigResponse(
+            org_id="org-1",
+            provider="openai",
+            model="gpt-4o",
+            configured=True,
+        )
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with patch.object(
+                client._async,
+                "set_llm_config",
+                new=AsyncMock(return_value=response),
+            ) as set_config:
+                assert (
+                    client.set_llm_config(
+                        provider="openai",
+                        model="gpt-4o",
+                        reasoning_effort=None,
+                        model_reasoning_effort={},
+                    )
+                    == response
+                )
+
+        set_config.assert_awaited_once_with(
+            provider="openai",
+            model="gpt-4o",
+            reasoning_effort=None,
+            model_reasoning_effort={},
+        )
+
     def test_legacy_admin_usage_delegates(self):
         result = UsageSummary(total_runs=1)
 
@@ -176,6 +209,7 @@ class TestSyncDelegation:
         regenerated = RegenerateCredentialsResponse(
             client_id="client-2",
             client_secret="secret-once",
+            scope="publish",
             created_at="2026-07-17T00:00:00Z",
         )
 
@@ -197,6 +231,189 @@ class TestSyncDelegation:
 
         get_credentials.assert_awaited_once_with()
         regenerate_credentials.assert_awaited_once_with()
+
+    def test_disable_org_credential_delegates(self):
+        from teardrop.models import OrgCredentialDisableResponse
+
+        result = OrgCredentialDisableResponse(
+            client_id="client-1",
+            disabled_at="2026-07-17T00:00:00Z",
+        )
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with patch.object(
+                client._async,
+                "disable_org_credential",
+                new=AsyncMock(return_value=result),
+            ) as disable:
+                assert client.disable_org_credential("client-1") == result
+
+        disable.assert_awaited_once_with("client-1")
+
+    def test_scorecard_methods_delegate(self):
+        from teardrop.models import (
+            LeaderboardResponse,
+            ScorecardItem,
+            ScorecardResponse,
+            ScorecardTaskListResponse,
+        )
+
+        tasks = ScorecardTaskListResponse(items=[])
+        item = ScorecardItem(
+            subject="0x" + "1" * 40,
+            platform_attested=False,
+            eligible=False,
+            n_scored=0,
+            rounds_submitted=0,
+            rounds_expected=10,
+            coverage=None,
+            unresolved=0,
+            mean_brier=None,
+            adjusted_brier=None,
+            accuracy=None,
+            calibration=None,
+        )
+        leaderboard = LeaderboardResponse(
+            definition_key="quality.v1",
+            definition_version=1,
+            definition_sha256="a" * 64,
+            window_days=30,
+            min_sample=10,
+            items=[item],
+        )
+        scorecard = ScorecardResponse(
+            definition_key="quality.v1",
+            definition_version=1,
+            definition_sha256="a" * 64,
+            window_days=30,
+            min_sample=10,
+            item=item,
+        )
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with (
+                patch.object(
+                    client._async.scorecards,
+                    "list_tasks",
+                    new=AsyncMock(return_value=tasks),
+                ) as list_tasks,
+                patch.object(
+                    client._async.scorecards,
+                    "get_leaderboard",
+                    new=AsyncMock(return_value=leaderboard),
+                ) as get_leaderboard,
+                patch.object(
+                    client._async.scorecards,
+                    "get_scorecard",
+                    new=AsyncMock(return_value=scorecard),
+                ) as get_scorecard,
+            ):
+                assert client.scorecards.list_tasks() == tasks
+                assert (
+                    client.scorecards.get_leaderboard("quality.v1", 1, window_days=30)
+                    == leaderboard
+                )
+                assert (
+                    client.scorecards.get_scorecard(
+                        "quality.v1", 1, "0x" + "1" * 40, window_days=30
+                    )
+                    == scorecard
+                )
+
+        list_tasks.assert_awaited_once_with()
+        get_leaderboard.assert_awaited_once_with("quality.v1", 1, window_days=30)
+        get_scorecard.assert_awaited_once_with("quality.v1", 1, "0x" + "1" * 40, window_days=30)
+
+    def test_labeling_prediction_methods_delegate(self):
+        from teardrop.models import (
+            PredictionProofResponse,
+            PredictionSubmitRequest,
+            PredictionSubmitResponse,
+        )
+
+        request = PredictionSubmitRequest(
+            definition_key="quality.v1",
+            definition_version=1,
+            idempotency_key="request-1",
+            signer_address="0x" + "1" * 40,
+            signature="0x" + "a" * 130,
+            predictions={"value": 0.5},
+        )
+        submitted = PredictionSubmitResponse(
+            id="prediction-1",
+            payload_sha256="a" * 64,
+            status="accepted",
+            created=True,
+        )
+        proof = PredictionProofResponse(
+            prediction_id="prediction-1",
+            status="submitted",
+            hash_algorithm="rfc6962-sha256",
+            leaf_version=1,
+            leaf_preimage={"prediction_id": "prediction-1"},
+            salt="salt",
+            leaf_sha256="b" * 64,
+            anchor=None,
+        )
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with (
+                patch.object(
+                    client._async.labeling,
+                    "submit_prediction",
+                    new=AsyncMock(side_effect=[submitted, None]),
+                ) as submit,
+                patch.object(
+                    client._async.labeling,
+                    "get_prediction_proof",
+                    new=AsyncMock(return_value=proof),
+                ) as get_proof,
+            ):
+                assert client.labeling.submit_prediction(request) == submitted
+                assert client.labeling.submit_prediction(request) is None
+                assert client.labeling.get_prediction_proof("prediction-1") == proof
+
+        assert submit.await_count == 2
+        submit.assert_awaited_with(request)
+        get_proof.assert_awaited_once_with("prediction-1")
+
+    def test_marketplace_registration_checks_delegate(self):
+        from teardrop.models import (
+            MarketplaceAgentRegistrationCheck,
+            MarketplaceAgentRegistrationPreviewResponse,
+            MarketplaceAgentRegistrationRequest,
+            MarketplaceAgentRegistrationTestResponse,
+        )
+
+        request = MarketplaceAgentRegistrationRequest(agent_url="https://agent.test")
+        preview = MarketplaceAgentRegistrationPreviewResponse(registrable=True)
+        test = MarketplaceAgentRegistrationTestResponse(
+            passed=True,
+            checks=[
+                MarketplaceAgentRegistrationCheck(
+                    name="a2a", status="pass", detail="A2A response received"
+                )
+            ],
+        )
+
+        with TeardropClient("http://test", token="tok.en.sig") as client:
+            with (
+                patch.object(
+                    client._async,
+                    "preview_agent_registration",
+                    new=AsyncMock(return_value=preview),
+                ) as preview_registration,
+                patch.object(
+                    client._async,
+                    "test_agent_registration",
+                    new=AsyncMock(return_value=test),
+                ) as test_registration,
+            ):
+                assert client.preview_agent_registration(request) == preview
+                assert client.test_agent_registration(request) == test
+
+        preview_registration.assert_awaited_once_with(request)
+        test_registration.assert_awaited_once_with(request)
 
     def test_agent_governance_methods_delegate_with_spec_arguments(self):
         from teardrop.models import (

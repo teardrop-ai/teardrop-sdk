@@ -6,6 +6,7 @@ from teardrop.client._core import _quote_path_segment
 from teardrop.models import (
     AuthMeResponse,
     CreateInviteResponse,
+    OrgCredentialDisableResponse,
     OrgCredentialItem,
     PrincipalSpendLimitRequest,
     PrincipalSpendLimitResponse,
@@ -153,6 +154,16 @@ class _AuthMixin:
         )
         self._raise_for_status(resp)
         return RegenerateCredentialsResponse.model_validate(resp.json())
+
+    async def disable_org_credential(self, client_id: str) -> OrgCredentialDisableResponse:
+        """Disable one organization credential; repeated requests are idempotent."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/org/credentials/{_quote_path_segment(client_id)}/disable",
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return OrgCredentialDisableResponse.model_validate(resp.json())
 
     async def get_org_principal_spend_limits(self) -> list[PrincipalSpendLimitResponse]:
         http = await self._get_http()

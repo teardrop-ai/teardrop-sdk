@@ -15,6 +15,7 @@ from teardrop.client.marketplace import _MarketplaceMixin
 from teardrop.client.mcp import _McpMixin
 from teardrop.client.memory import _MemoryMixin
 from teardrop.client.schedules import SchedulesModule
+from teardrop.client.scorecards import ScorecardsModule
 from teardrop.client.tools import _ToolsMixin
 from teardrop.client.usage import _UsageMixin
 from teardrop.client.wallets import _WalletsMixin
@@ -62,3 +63,4 @@ class AsyncTeardropClient(
         self.schedules = SchedulesModule(self)
         self.event_triggers = EventTriggersModule(self)
         self.labeling = LabelingModule(self)
+        self.scorecards = ScorecardsModule(self)

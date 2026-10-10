@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, RootModel
+from pydantic import BaseModel, Field, RootModel
 
 
 class OrgCredentialsEntry(BaseModel):
@@ -10,6 +10,10 @@ class OrgCredentialsEntry(BaseModel):
 
     client_id: str
     created_at: str
+    disabled_at: str | None = Field(
+        default=None, description="ISO 8601 timestamp of disable, or null if active."
+    )
+    scope: str = Field(default="publish", description="Granted scope: read, publish, or withdraw.")
 
 
 OrgCredentialItem = OrgCredentialsEntry
@@ -29,10 +33,18 @@ class RegenerateCredentialsResponse(BaseModel):
 
     client_id: str
     client_secret: str
+    scope: str = Field(description="Granted scope: read, publish, or withdraw.")
     created_at: str
 
 
 OrgCredentialRegenerateResponse = RegenerateCredentialsResponse
+
+
+class OrgCredentialDisableResponse(BaseModel):
+    """Response from POST /org/credentials/{client_id}/disable."""
+
+    client_id: str = Field(description="M2M client ID that was disabled.")
+    disabled_at: str = Field(description="ISO 8601 timestamp of the disable.")
 
 
 class OrgSpendingConfigResponse(BaseModel):

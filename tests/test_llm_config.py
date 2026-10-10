@@ -42,6 +42,8 @@ _ORG_LLM_CONFIG = {
     "temperature": 0.0,
     "timeout_seconds": 120,
     "routing_preference": "default",
+    "model_reasoning_effort": {"anthropic:claude-haiku-4-5-20251001": "medium"},
+    "reasoning_effort": "low",
     "is_byok": False,
     "created_at": "2026-04-16T00:00:00Z",
     "updated_at": "2026-04-16T00:00:00Z",
@@ -95,6 +97,8 @@ class TestGetLlmConfig:
         assert result.org_id == "org-1"
         assert result.provider == "anthropic"
         assert result.has_api_key is False
+        assert result.model_reasoning_effort == {"anthropic:claude-haiku-4-5-20251001": "medium"}
+        assert result.reasoning_effort == "low"
 
     @pytest.mark.asyncio
     async def test_result_is_cached(self):
@@ -235,6 +239,28 @@ class TestSetLlmConfig:
         call_kwargs = mock_http.put.call_args
         body = call_kwargs.kwargs["json"]
         assert "api_key" not in body
+        assert "reasoning_effort" not in body
+        assert "model_reasoning_effort" not in body
+
+    @pytest.mark.asyncio
+    async def test_reasoning_effort_preserves_omitted_and_explicit_values(self):
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.put = AsyncMock(return_value=_json_response(_ORG_LLM_CONFIG))
+
+        async with AsyncTeardropClient("http://test", token="tok.en.sig") as client:
+            client._http = mock_http
+            with patch.object(client._token_manager, "get_token", return_value="tok.en.sig"):
+                await client.set_llm_config(
+                    provider="anthropic",
+                    model="claude-haiku-4-5-20251001",
+                    reasoning_effort=None,
+                    model_reasoning_effort={},
+                )
+
+        body = mock_http.put.call_args.kwargs["json"]
+        assert body["reasoning_effort"] is None
+        assert body["model_reasoning_effort"] == {}
 
     @pytest.mark.asyncio
     async def test_null_api_key_sent_to_clear_byok(self):

@@ -117,6 +117,7 @@ class CreateClientCredentialsResponse(BaseModel):
     client_id: str
     client_secret: str
     org_id: str
+    scope: str = Field(description="Granted scope: read, publish, or withdraw.")
     created_at: str
 
     model_config = {"extra": "allow"}

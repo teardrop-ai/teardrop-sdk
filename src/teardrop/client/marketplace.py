@@ -7,8 +7,10 @@ from typing import Any
 from teardrop.client._core import _quote_path_segment
 from teardrop.models import (
     MarketplaceAgentDirectoryResponse,
+    MarketplaceAgentRegistrationPreviewResponse,
     MarketplaceAgentRegistrationRequest,
     MarketplaceAgentRegistrationResponse,
+    MarketplaceAgentRegistrationTestResponse,
     MarketplaceAuthorConfigResponse,
     MarketplaceAuthorIndexResponse,
     MarketplaceAuthorProfileResponse,
@@ -66,6 +68,32 @@ class _MarketplaceMixin:
         )
         self._raise_for_status(resp)
         return None
+
+    async def preview_agent_registration(
+        self, request: MarketplaceAgentRegistrationRequest
+    ) -> MarketplaceAgentRegistrationPreviewResponse:
+        """Validate a registration without writing any registration data."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/marketplace/agent-registration/preview",
+            json=request.model_dump(exclude_none=True),
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return MarketplaceAgentRegistrationPreviewResponse.model_validate(resp.json())
+
+    async def test_agent_registration(
+        self, request: MarketplaceAgentRegistrationRequest
+    ) -> MarketplaceAgentRegistrationTestResponse:
+        """Probe an agent once without payment, billing, or signing."""
+        http = await self._get_http()
+        resp = await http.post(
+            f"{self._base_url}/marketplace/agent-registration/test",
+            json=request.model_dump(exclude_none=True),
+            headers=await self._headers(),
+        )
+        self._raise_for_status(resp)
+        return MarketplaceAgentRegistrationTestResponse.model_validate(resp.json())
 
     async def get_marketplace_agents(
         self,
