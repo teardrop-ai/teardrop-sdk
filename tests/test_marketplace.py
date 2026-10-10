@@ -12,8 +12,10 @@ from teardrop.models import (
     AuthorConfig,
     EarningsEntry,
     MarketplaceAgentDirectoryResponse,
+    MarketplaceAgentRegistrationPreviewResponse,
     MarketplaceAgentRegistrationRequest,
     MarketplaceAgentRegistrationResponse,
+    MarketplaceAgentRegistrationTestResponse,
     MarketplaceAuthorIndexResponse,
     MarketplaceAuthorProfileResponse,
     MarketplaceBalanceResponse,
@@ -28,6 +30,7 @@ from teardrop.models import (
     MarketplaceSubscription,
     MarketplaceSubscriptionListResponse,
     MarketplaceTool,
+    MarketplaceToolSummary,
     MarketplaceWithdrawalHistoryItem,
     MarketplaceWithdrawalResponse,
     MarketplaceWithdrawalsListResponse,
@@ -565,11 +568,76 @@ class TestAgentRegistration:
         assert args[0] == "http://test/marketplace/agent-registration"
         assert kwargs["json"] == {"agent_url": "https://a.dev"}
 
+    async def test_preview_registration_posts_dry_run_request(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "registrable": True,
+                "agent_url": "https://a.dev",
+                "price_per_task_usdc": 250,
+                "detail": None,
+            }
+        )
+
+        result = await client.preview_agent_registration(
+            MarketplaceAgentRegistrationRequest(agent_url="https://a.dev")
+        )
+
+        assert isinstance(result, MarketplaceAgentRegistrationPreviewResponse)
+        assert result.registrable is True
+        assert result.price_per_task_usdc == 250
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/marketplace/agent-registration/preview"
+        assert kwargs["json"] == {"agent_url": "https://a.dev"}
+
+    async def test_test_registration_returns_checks(self, client, mock_http):
+        mock_http.post.return_value = _json_response(
+            {
+                "passed": True,
+                "checks": [{"name": "a2a", "status": "pass", "detail": "A2A response received"}],
+                "agent_url": "https://a.dev",
+            }
+        )
+
+        result = await client.test_agent_registration(
+            MarketplaceAgentRegistrationRequest(agent_url="https://a.dev")
+        )
+
+        assert isinstance(result, MarketplaceAgentRegistrationTestResponse)
+        assert result.checks[0].status == "pass"
+        args, kwargs = mock_http.post.call_args
+        assert args[0] == "http://test/marketplace/agent-registration/test"
+        assert kwargs["json"] == {"agent_url": "https://a.dev"}
+
     async def test_delete_returns_none(self, client, mock_http):
         mock_http.delete.return_value = _json_response({}, status=204)
         assert await client.delete_agent_registration() is None
         args, _ = mock_http.delete.call_args
         assert args[0] == "http://test/marketplace/agent-registration"
+
+
+def test_marketplace_tool_summary_supports_optional_output_schema():
+    summary = MarketplaceToolSummary(
+        name="search",
+        qualified_name="acme/search",
+        tool_name="search",
+        display_name="Search",
+        description="Search the web",
+        short_description="Web search",
+        input_schema={"type": "object"},
+        output_schema={"type": "object"},
+        cost_usdc=10,
+        tool_type="webhook",
+        category="search",
+        total_calls=5,
+        reputation_score=0.9,
+        success_rate=0.95,
+        health_status="healthy",
+        is_healthy=True,
+        author="Acme",
+        author_slug="acme",
+    )
+
+    assert summary.output_schema == {"type": "object"}
 
 
 class TestMarketplaceDirectory:

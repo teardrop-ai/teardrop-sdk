@@ -16,12 +16,16 @@ Use this table to find which model backs which client method.
 | `StripeTopupRequest`, `StripeTopupResponse`, `StripeTopupStatusResponse` | `topup_stripe()`, `get_stripe_topup_status()` |
 | `UsdcTopupRequirements`, `UsdcTopupRequirementsResponse`, `UsdcTopupRequest`, `UsdcTopupResponse` | `get_usdc_topup_requirements()`, `topup_usdc()` |
 | `UsageSummary` | `get_usage()` |
+| `ChargeReconciliationResponse`, `ReconciliationCheckResponse` | `admin.admin_get_charge_reconciliation()` |
 | `OrgLlmConfig`, `SetLlmConfigRequest`, `ProviderType`, `RoutingPreference` | LLM config CRUD |
+| `UpsertLlmConfigRequest` | `PUT /llm-config` request schema |
 | `CreateScheduleRequest`, `ScheduledRun`, `ScheduledRunResult`, `ScheduledRunsPage`, `UpdateScheduleRequest` | `client.schedules.*` |
 | `ScheduleRunNowResponse` | `client.schedules.run_now()` |
 | `CreateEventTriggerRequest`, `EventTrigger`, `EventTriggerWithSecret`, `UpdateEventTriggerRequest` | `client.event_triggers.*` |
 | `EventTaskResponse` | `client.event_triggers.get_run()` |
 | `LabelingBindingRequest`, `LabelingBindingResponse`, `LabelingDefinitionListResponse`, `LabelingPredictionListResponse`, `LabelingResultListResponse`, `LabelingOverrideResponse`, `ScoreResult` | `client.labeling.*` |
+| `PredictionSubmitRequest`, `PredictionSubmitResponse`, `PredictionProofResponse`, `PredictionProofAnchor` | `client.labeling.submit_prediction()`, `client.labeling.get_prediction_proof()` |
+| `ScorecardTask`, `ScorecardTaskListResponse`, `LeaderboardResponse`, `ScorecardResponse`, `ScorecardItem`, `CalibrationBin` | `client.scorecards.*` |
 | `ModelBenchmarksResponse`, `ModelInfo`, `ModelPricing`, `ModelRunBenchmarks` | `get_model_benchmarks()`, `get_org_model_benchmarks()` |
 | `Wallet`, `LinkWalletRequest` | `get_wallets()`, `link_wallet()` |
 | `AgentCard` | `get_agent_card()` |
@@ -34,6 +38,7 @@ Use this table to find which model backs which client method.
 | `A2ADelegationEvent`, `A2AAgentDeletedResponse` | delegation history and trusted-agent removal |
 | `PossiblyDeliveredDelegationItem`, `ResolveA2ADelegationRequest`, `ResolveA2ADelegationResponse` | `admin_list_possibly_delivered_delegations()`, `admin_resolve_a2a_delegation()` |
 | `MarketplaceAgentRegistrationRequest`, `MarketplaceAgentRegistrationResponse` | `get/set/delete_agent_registration()` |
+| `MarketplaceAgentRegistrationCheck`, `MarketplaceAgentRegistrationPreviewResponse`, `MarketplaceAgentRegistrationTestResponse` | `preview_agent_registration()`, `test_agent_registration()` |
 | `MarketplaceAgentSummary`, `MarketplaceAgentDirectoryResponse` | `get_marketplace_agents()` |
 | `MarketplaceAuthorSummary`, `MarketplaceAuthorIndexResponse` | `get_marketplace_authors()` |
 | `MarketplaceQuoteResponse` | `get_marketplace_quote()` |
@@ -44,7 +49,8 @@ Use this table to find which model backs which client method.
 | `AdminMemoryItem`, `AdminMemoryListResponse`, `AdminMemoryPurgeResponse`, `AdminWithdrawalItem`, `AdminWithdrawalListResponse`, `SweepStatusItem`, `SweepStatusResponse` | admin responses |
 | `AdminTopupResponse`, `PendingSettlementItem`, `PendingSettlementsResponse`, `RevenueSummaryResponse`, `SettlementBalanceResponse`, `SettlementRetryResponse` | admin billing responses |
 | `AdminWithdrawalActionResponse`, `CompleteWithdrawalResponse`, `MarketplaceSweepResponse`, `WithdrawalResetResponse` | admin marketplace responses |
-| `CreateClientCredentialsResponse`, `CreateOrgResponse`, `CreateUserResponse`, `OrgSpendingConfigResponse` | admin identity and spending responses |
+| `CreateClientCredentialsRequest`, `CreateClientCredentialsResponse`, `CreateOrgResponse`, `CreateUserResponse`, `OrgSpendingConfigResponse` | admin identity and spending requests/responses |
+| `OrgCredentialItem`, `OrgCredentialRegenerateResponse`, `OrgCredentialDisableResponse` | organization credential list, rotation, and `disable_org_credential()` |
 | `ToolPricingDeleteResponse`, `ToolPricingOverrideResponse` | admin pricing responses |
 
 Import any model directly:

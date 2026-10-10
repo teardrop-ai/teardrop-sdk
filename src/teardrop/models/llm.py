@@ -41,12 +41,30 @@ class SetLlmConfigRequest(BaseModel):
 
     provider: ProviderType
     model: str
+    model_reasoning_effort: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Per-model reasoning effort overrides keyed 'provider:model' "
+            '(e.g. {"openrouter:~anthropic/claude-opus-latest": "high"}). '
+            "Takes precedence over reasoning_effort, including for smart-routed models."
+        ),
+    )
+    reasoning_effort: str | None = Field(
+        default=None,
+        description=(
+            "Org-wide reasoning effort: none, minimal, low, medium, or high. "
+            "Omit to use the platform default for each model."
+        ),
+    )
     api_key: str | None = None
     api_base: str | None = None
     max_tokens: int = Field(default=4096, ge=1, le=200_000)
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     timeout_seconds: int = Field(default=120, ge=1)
     routing_preference: RoutingPreference = "default"
+
+
+UpsertLlmConfigRequest = SetLlmConfigRequest
 
 
 class ModelPricing(BaseModel):
@@ -94,6 +112,10 @@ class LlmConfigResponse(OrgLlmConfig):
     provider: str
     model: str
     configured: bool
+    model_reasoning_effort: dict[str, str] | None = Field(
+        default=None, description="Present when configured=true."
+    )
+    reasoning_effort: str | None = None
 
 
 class LlmConfigDeletedResponse(BaseModel):

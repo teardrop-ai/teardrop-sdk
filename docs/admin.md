@@ -36,6 +36,7 @@ with AdminTeardropClient(
 | Billing | `admin_get_pending_settlements(status, limit)` | `GET /admin/billing/pending` |
 | Billing | `admin_retry_settlement(settlement_id)` | `POST /admin/billing/pending/{settlement_id}/retry` |
 | Billing | `admin_get_revenue(start, end)` | `GET /admin/billing/revenue` |
+| Billing | `admin_get_charge_reconciliation(start, end)` | `GET /admin/billing/charges/reconciliation` |
 | Billing | `admin_topup_credits(req)` | `POST /admin/credits/topup` |
 | Identity | `admin_create_client_credentials(req)` | `POST /admin/client-credentials` |
 | Identity | `admin_create_org(req)` | `POST /admin/orgs` |
@@ -89,6 +90,10 @@ All admin request models are in `teardrop.models.admin`:
 - `ToolPricingOverrideRequest`
 
 Response models are exported from their domain modules (`teardrop.models.billing`, `teardrop.models.marketplace`, etc.) and re-exported from `teardrop.models`.
+
+Charge reconciliation is admin-only. `start` and `end` are optional ISO 8601
+timestamps; when omitted, the API uses an end five minutes before now and a
+start 24 hours before that end.
 
 ---
 

@@ -75,13 +75,23 @@ pairs (used with the `client_id=..., client_secret=...` constructor mode).
 ```python
 creds = await client.get_org_credentials()
 for c in creds:
-    print(c.client_id, c.created_at)  # secrets are never returned after creation
+    print(c.client_id, c.scope, c.disabled_at)  # secrets are never returned
 
 # Admin-only: deletes every existing credential for the org and issues a new
 # pair. The new client_secret is returned exactly once — store it immediately.
 rotated = await client.regenerate_org_credentials()
 print(rotated.client_id, rotated.client_secret)
+
+# Disable one credential. Repeating this call is idempotent and returns the
+# original disabled_at timestamp.
+disabled = await client.disable_org_credential(creds[0].client_id)
+print(disabled.client_id, disabled.disabled_at)
 ```
+
+Disabling a credential revokes tokens minted from it across authenticated REST,
+MCP, and A2A paths, even before those JWTs expire. Unknown or foreign-org
+credentials return `NotFoundError`. The synchronous facade exposes
+`disable_org_credential()` as well.
 
 ## Live Tool Discovery
 

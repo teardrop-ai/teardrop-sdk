@@ -12,6 +12,8 @@ from teardrop.models import (
     A2AAgentDeletedResponse,
     A2ADelegationEvent,
     AddTrustedAgentRequest,
+    OrgA2AAgentListItem,
+    OrgA2AAgentResponse,
     TrustedAgent,
 )
 
@@ -51,12 +53,14 @@ _TRUSTED_AGENT = {
 
 class TestAddTrustedAgent:
     async def test_returns_trusted_agent(self, client, mock_http):
-        mock_http.post.return_value = _json_response(_TRUSTED_AGENT)
+        mock_http.post.return_value = _json_response({**_TRUSTED_AGENT, "source": "self_serve"})
         req = AddTrustedAgentRequest(agent_url="https://agent.dev", label="My Agent")
         result = await client.add_trusted_agent(req)
+        assert isinstance(result, OrgA2AAgentResponse)
         assert isinstance(result, TrustedAgent)
         assert result.agent_url == "https://agent.dev"
         assert result.label == "My Agent"
+        assert result.source == "self_serve"
 
     async def test_exclude_none_omits_unset_optional_fields(self, client, mock_http):
         mock_http.post.return_value = _json_response(_TRUSTED_AGENT)
@@ -90,10 +94,17 @@ class TestAddTrustedAgent:
 
 class TestListTrustedAgents:
     async def test_returns_list_of_trusted_agents(self, client, mock_http):
-        mock_http.get.return_value = _json_response([_TRUSTED_AGENT, _TRUSTED_AGENT])
+        mock_http.get.return_value = _json_response(
+            [
+                {**_TRUSTED_AGENT, "source": "self_serve"},
+                {**_TRUSTED_AGENT, "source": "admin"},
+            ]
+        )
         result = await client.list_trusted_agents()
         assert len(result) == 2
+        assert isinstance(result[0], OrgA2AAgentListItem)
         assert isinstance(result[0], TrustedAgent)
+        assert result[0].source == "self_serve"
 
     async def test_empty_list(self, client, mock_http):
         mock_http.get.return_value = _json_response([])

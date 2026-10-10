@@ -251,9 +251,22 @@ directory, and fetch atomic USDC quotes.
 ### Agent registration
 
 ```python
+from teardrop import MarketplaceAgentRegistrationRequest
+
+request = MarketplaceAgentRegistrationRequest(agent_url="https://agent.example.com")
+
+# Validate without creating or updating a registration.
+preview = await client.preview_agent_registration(request)
+print(preview.registrable, preview.detail)
+
+# Make one unpaid, unbilled probe of the endpoint.
+check = await client.test_agent_registration(request)
+for item in check.checks:
+    print(item.name, item.status, item.detail)
+
 # Publish / update your A2A endpoint
 reg = await client.set_agent_registration(
-    MarketplaceAgentRegistrationRequest(agent_url="https://agent.example.com")
+    request
 )
 print(reg.agent_url, reg.updated_at)
 
@@ -263,6 +276,12 @@ reg = await client.get_agent_registration()
 # Unpublish
 await client.delete_agent_registration()
 ```
+
+`preview_agent_registration()` is a no-write validation dry-run. The test call
+sends one unpaid, unbilled request; priced agents may respond with HTTP 402, and
+the SDK does not sign or settle anything.
+The synchronous facade exposes both checks as `client.preview_agent_registration()`
+and `client.test_agent_registration()`.
 
 ### Public directory
 

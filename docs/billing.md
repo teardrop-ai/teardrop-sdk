@@ -102,6 +102,28 @@ summary = await client.get_usage(start="2026-04-01", end="2026-04-30")
 Usage events in the `client.run()` stream also include cache performance metrics:
 - `cache_read_tokens`: Input tokens served from cache (cheaper/faster).
 - `cache_creation_tokens`: Tokens written to the cache for future use.
+
+## Admin Charge Reconciliation
+
+Compare the unified charge ledger with legacy billing records using the
+admin-only client:
+
+```python
+report = await admin.admin_get_charge_reconciliation()
+# Optional ISO 8601 bounds:
+report = await admin.admin_get_charge_reconciliation(
+    start="2026-10-01T00:00:00Z",
+    end="2026-10-02T00:00:00Z",
+)
+print(report.ok, report.legacy_revenue_usdc, report.ledger_revenue_usdc)
+for check in report.checks:
+    print(check.name, check.discrepancies, check.sample_ids)
+```
+
+If omitted, `end` defaults to five minutes before now and `start` defaults to
+24 hours before `end`. A report is `ok` only when every check has zero
+discrepancies.
+
 ## Principal Spend Limits (spec 1.6.0)
 
 Org-scoped daily spend limits per principal (user or client credential):

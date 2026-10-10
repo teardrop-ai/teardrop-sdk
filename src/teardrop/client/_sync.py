@@ -8,6 +8,7 @@ from teardrop.client._async import AsyncTeardropClient
 from teardrop.client.event_triggers import _SyncEventTriggersModule
 from teardrop.client.labeling import _SyncLabelingModule
 from teardrop.client.schedules import _SyncSchedulesModule
+from teardrop.client.scorecards import _SyncScorecardsModule
 from teardrop.models import (
     A2AAgentDeletedResponse,
     A2ADelegationEvent,
@@ -35,8 +36,10 @@ from teardrop.models import (
     LlmConfigDeletedResponse,
     LlmConfigResponse,
     MarketplaceAgentDirectoryResponse,
+    MarketplaceAgentRegistrationPreviewResponse,
     MarketplaceAgentRegistrationRequest,
     MarketplaceAgentRegistrationResponse,
+    MarketplaceAgentRegistrationTestResponse,
     MarketplaceAuthorConfigResponse,
     MarketplaceAuthorIndexResponse,
     MarketplaceAuthorProfileResponse,
@@ -60,6 +63,7 @@ from teardrop.models import (
     MemoryDeletedResponse,
     MemoryListResponse,
     ModelBenchmarksResponse,
+    OrgCredentialDisableResponse,
     OrgCredentialItem,
     OrgToolResponse,
     PrincipalSpendLimitRequest,
@@ -111,6 +115,7 @@ class TeardropClient:
         self.schedules = _SyncSchedulesModule(self)
         self.event_triggers = _SyncEventTriggersModule(self)
         self.labeling = _SyncLabelingModule(self)
+        self.scorecards = _SyncScorecardsModule(self)
         self._portal: Any | None = None
         self._portal_exit: Any | None = None
 
@@ -206,6 +211,9 @@ class TeardropClient:
 
     def regenerate_org_credentials(self) -> RegenerateCredentialsResponse:
         return self._run(self._async.regenerate_org_credentials())
+
+    def disable_org_credential(self, client_id: str) -> OrgCredentialDisableResponse:
+        return self._run(self._async.disable_org_credential(client_id))
 
     def get_org_principal_spend_limits(self) -> list[PrincipalSpendLimitResponse]:
         return self._run(self._async.get_org_principal_spend_limits())
@@ -351,6 +359,16 @@ class TeardropClient:
         self, request: MarketplaceAgentRegistrationRequest
     ) -> MarketplaceAgentRegistrationResponse:
         return self._run(self._async.set_agent_registration(request))
+
+    def preview_agent_registration(
+        self, request: MarketplaceAgentRegistrationRequest
+    ) -> MarketplaceAgentRegistrationPreviewResponse:
+        return self._run(self._async.preview_agent_registration(request))
+
+    def test_agent_registration(
+        self, request: MarketplaceAgentRegistrationRequest
+    ) -> MarketplaceAgentRegistrationTestResponse:
+        return self._run(self._async.test_agent_registration(request))
 
     def delete_agent_registration(self) -> None:
         return self._run(self._async.delete_agent_registration())

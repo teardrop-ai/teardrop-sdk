@@ -764,12 +764,21 @@ class TestOrgCredentials:
         from teardrop.models import OrgCredentialItem
 
         mock_http.get.return_value = _json_response(
-            [{"client_id": "client-1", "created_at": "2026-07-17T00:00:00Z"}]
+            [
+                {
+                    "client_id": "client-1",
+                    "created_at": "2026-07-17T00:00:00Z",
+                    "disabled_at": None,
+                    "scope": "read",
+                }
+            ]
         )
         result = await client.get_org_credentials()
         assert len(result) == 1
         assert isinstance(result[0], OrgCredentialItem)
         assert result[0].client_id == "client-1"
+        assert result[0].disabled_at is None
+        assert result[0].scope == "read"
         args, kwargs = mock_http.get.call_args
         assert args[0] == "http://test/org/credentials"
         assert "headers" in kwargs
@@ -782,6 +791,7 @@ class TestOrgCredentials:
             {
                 "client_id": "client-2",
                 "client_secret": "secret-once",
+                "scope": "publish",
                 "created_at": "2026-07-17T00:00:00Z",
             },
             status=201,
@@ -789,6 +799,7 @@ class TestOrgCredentials:
         result = await client.regenerate_org_credentials()
         assert isinstance(result, RegenerateCredentialsResponse)
         assert result.client_secret == "secret-once"
+        assert result.scope == "publish"
         args, kwargs = mock_http.post.call_args
         assert args[0] == "http://test/org/credentials/regenerate"
         assert "headers" in kwargs

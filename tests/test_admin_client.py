@@ -24,6 +24,7 @@ from teardrop.models import (
     AdminTopupResponse,
     AdminWithdrawalActionResponse,
     AdminWithdrawalListResponse,
+    ChargeReconciliationResponse,
     CompleteWithdrawalRequest,
     CreateClientCredentialsResponse,
     CreateOrgResponse,
@@ -97,7 +98,7 @@ def test_admin_surface_covers_every_spec_operation():
         for name in dir(_AdminMixin)
         if name.startswith("admin_") and callable(getattr(_AdminMixin, name))
     }
-    assert spec_operation_count == 33
+    assert spec_operation_count == 34
     assert len(implemented_methods) == spec_operation_count
 
 
@@ -187,6 +188,43 @@ class TestAdminBilling:
         _, kwargs = mock_http.get.call_args
         assert kwargs["params"] == {"start": "2026-01-01", "end": "2026-07-17"}
 
+    async def test_admin_get_charge_reconciliation_forwards_window(self, client, mock_http):
+        mock_http.get.return_value = _json_response(
+            {
+                "start": "2026-07-17T00:00:00Z",
+                "end": "2026-07-18T00:00:00Z",
+                "ok": True,
+                "checks": [
+                    {
+                        "name": "ledger",
+                        "source_rows": 2,
+                        "discrepancies": {},
+                        "info": {},
+                        "sample_ids": [],
+                    }
+                ],
+                "legacy_revenue_usdc": 10,
+                "ledger_revenue_usdc": 10,
+                "ledger_mcp_revenue_usdc": 5,
+            }
+        )
+
+        await client.admin_get_charge_reconciliation()
+        assert mock_http.get.call_args.kwargs["params"] is None
+
+        result = await client.admin_get_charge_reconciliation(
+            start="2026-07-17T00:00:00Z", end="2026-07-18T00:00:00Z"
+        )
+
+        assert isinstance(result, ChargeReconciliationResponse)
+        assert result.ok is True
+        args, kwargs = mock_http.get.call_args
+        assert args[0] == "http://test/admin/billing/charges/reconciliation"
+        assert kwargs["params"] == {
+            "start": "2026-07-17T00:00:00Z",
+            "end": "2026-07-18T00:00:00Z",
+        }
+
     async def test_admin_topup_credits(self, client, mock_http):
         mock_http.post.return_value = _json_response(
             {
@@ -215,17 +253,20 @@ class TestAdminIdentity:
                 "client_id": "cid-1",
                 "client_secret": "secret-once",
                 "org_id": "org-1",
+                "scope": "publish",
                 "created_at": "2026-07-17T00:00:00Z",
             },
             status=201,
         )
-        req = AdminCreateClientCredentialsRequest(org_id="org-1")
+        req = AdminCreateClientCredentialsRequest(org_id="org-1", scope="read")
         result = await client.admin_create_client_credentials(req)
         assert isinstance(result, CreateClientCredentialsResponse)
         assert result.client_secret == "secret-once"
+        assert result.scope == "publish"
         args, kwargs = mock_http.post.call_args
         assert args[0] == "http://test/admin/client-credentials"
         assert kwargs["json"]["org_id"] == "org-1"
+        assert kwargs["json"]["scope"] == "read"
 
     async def test_admin_create_org(self, client, mock_http):
         mock_http.post.return_value = _json_response(
@@ -598,7 +639,16 @@ class TestAdminTelemetry:
             {
                 "window_days": 7,
                 "quote_hits": 12,
-                "series": [{"date": "2026-09-17", "quote_hits": 4}],
+                "mcp_402_no_payment": 3,
+                "mcp_402_payment_invalid": 2,
+                "series": [
+                    {
+                        "date": "2026-09-17",
+                        "quote_hits": 4,
+                        "mcp_402_no_payment": 1,
+                        "mcp_402_payment_invalid": 1,
+                    }
+                ],
             }
         )
 
@@ -606,7 +656,11 @@ class TestAdminTelemetry:
 
         assert isinstance(result, DiscoveryFunnelResponse)
         assert result.quote_hits == 12
+        assert result.mcp_402_no_payment == 3
+        assert result.mcp_402_payment_invalid == 2
         assert result.series[0].date == "2026-09-17"
+        assert result.series[0].mcp_402_no_payment == 1
+        assert result.series[0].mcp_402_payment_invalid == 1
         args, kwargs = mock_http.get.call_args
         assert args[0] == "http://test/admin/telemetry/discovery-funnel"
         assert kwargs["params"] == {"days": 30}

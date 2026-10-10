@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 # ── Admin A2A ─────────────────────────────────────────────────────────────────
@@ -29,6 +31,10 @@ class AdminCreateClientCredentialsRequest(BaseModel):
     """Request body for POST /admin/client-credentials."""
 
     org_id: str
+    scope: Literal["read", "publish", "withdraw"] = "publish"
+
+
+CreateClientCredentialsRequest = AdminCreateClientCredentialsRequest
 
 
 class AdminCreateOrgRequest(BaseModel):

@@ -39,6 +39,8 @@ class DiscoveryStageDay(BaseModel):
     agent_card_hits: int = 0
     catalog_hits: int = 0
     mcp_402_challenges: int = 0
+    mcp_402_no_payment: int = 0
+    mcp_402_payment_invalid: int = 0
     mcp_server_card_hits: int = 0
     quote_hits: int = 0
     settled_calls: int = 0
@@ -56,6 +58,8 @@ class DiscoveryFunnelResponse(BaseModel):
     catalog_hits: int = 0
     challenge_to_settle_rate: float | None = None
     mcp_402_challenges: int = 0
+    mcp_402_no_payment: int = 0
+    mcp_402_payment_invalid: int = 0
     mcp_server_card_hits: int = 0
     quote_hits: int = 0
     series: list[DiscoveryStageDay] = Field(default_factory=list)

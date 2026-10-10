@@ -19,6 +19,7 @@ from teardrop.models import (
     AdminTopupResponse,
     AdminWithdrawalActionResponse,
     AdminWithdrawalListResponse,
+    ChargeReconciliationResponse,
     CompleteWithdrawalRequest,
     CompleteWithdrawalResponse,
     CreateClientCredentialsResponse,
@@ -126,6 +127,11 @@ class AdminTeardropClient:
         self, *, start: str | None = None, end: str | None = None
     ) -> RevenueSummaryResponse:
         return self._run(self._async.admin_get_revenue(start=start, end=end))
+
+    def admin_get_charge_reconciliation(
+        self, *, start: str | None = None, end: str | None = None
+    ) -> ChargeReconciliationResponse:
+        return self._run(self._async.admin_get_charge_reconciliation(start=start, end=end))
 
     def admin_topup_credits(self, request: AdminTopupRequest) -> AdminTopupResponse:
         return self._run(self._async.admin_topup_credits(request))

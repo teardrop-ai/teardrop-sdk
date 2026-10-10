@@ -55,6 +55,56 @@ class LabelingPredictionListResponse(BaseModel):
     items: list[LabelingPredictionItem]
 
 
+class PredictionSubmitRequest(BaseModel):
+    """Signed external prediction submission; the server assigns its timestamp."""
+
+    definition_key: str = Field(pattern=r"^[a-z0-9][a-z0-9_.-]{0,127}$")
+    definition_version: int = Field(gt=0)
+    idempotency_key: str = Field(pattern=r"^[A-Za-z0-9._:-]{1,128}$")
+    signer_address: str = Field(pattern=r"^0x[0-9a-fA-F]{40}$")
+    signature: str = Field(pattern=r"^0x[0-9a-fA-F]{130}$")
+    predictions: dict[str, Any]
+
+    model_config = {"extra": "forbid"}
+
+
+class PredictionSubmitResponse(BaseModel):
+    """Result body for a newly accepted prediction submission."""
+
+    id: str
+    payload_sha256: str
+    status: Literal["accepted"]
+    created: bool
+
+
+class PredictionProofAnchor(BaseModel):
+    """Merkle-batch commitment and optional chain-anchor metadata."""
+
+    batch_id: str
+    leaf_index: int
+    tree_size: int
+    merkle_root: str
+    audit_path: list[str]
+    chain_id: int
+    tx_hash: str | None
+    anchor_address: str | None
+    block_number: int | None
+    anchored_at: str | None
+
+
+class PredictionProofResponse(BaseModel):
+    """Prediction commitment proof, with an anchor once the batch is sealed."""
+
+    prediction_id: str
+    status: Literal["pending", "submitted", "anchored"]
+    hash_algorithm: Literal["rfc6962-sha256"]
+    leaf_version: int
+    leaf_preimage: dict[str, Any]
+    salt: str
+    leaf_sha256: str
+    anchor: PredictionProofAnchor | None
+
+
 class LabelingResultItem(BaseModel):
     id: str
     target_id: str

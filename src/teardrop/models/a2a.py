@@ -29,7 +29,12 @@ class TrustedAgent(BaseModel):
 
 
 A2AAgentResponse = TrustedAgent
-OrgA2AAgentResponse = TrustedAgent
+
+
+class OrgA2AAgentResponse(TrustedAgent):
+    """Response from the org-scoped trusted-agent endpoints."""
+
+    source: str = Field(default="admin", description="admin or self_serve")
 
 
 class A2AAgentListItem(TrustedAgent):
@@ -40,6 +45,7 @@ class OrgA2AAgentListItem(A2AAgentListItem):
     """Item returned by GET /a2a/agents (org-scoped; spec omits org_id here)."""
 
     org_id: str = ""
+    source: str = Field(default="admin", description="admin or self_serve")
 
 
 class A2AAgentDeletedResponse(BaseModel):

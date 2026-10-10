@@ -19,6 +19,7 @@ from teardrop.models import (
     AdminTopupResponse,
     AdminWithdrawalActionResponse,
     AdminWithdrawalListResponse,
+    ChargeReconciliationResponse,
     CompleteWithdrawalRequest,
     CreateClientCredentialsResponse,
     CreateOrgResponse,
@@ -135,6 +136,25 @@ class TestAdminSyncDelegation:
                 assert admin.admin_get_revenue(start="2026-01-01") == result
                 mock.assert_awaited_once_with(start="2026-01-01", end=None)
 
+    def test_admin_get_charge_reconciliation(self):
+        result = ChargeReconciliationResponse(
+            start="2026-07-17T00:00:00Z",
+            end="2026-07-18T00:00:00Z",
+            ok=True,
+            checks=[],
+            legacy_revenue_usdc=10,
+            ledger_revenue_usdc=10,
+            ledger_mcp_revenue_usdc=5,
+        )
+        with AdminTeardropClient("http://test", token="tok.en.sig") as admin:
+            with patch.object(
+                admin._async,
+                "admin_get_charge_reconciliation",
+                new=AsyncMock(return_value=result),
+            ) as mock:
+                assert admin.admin_get_charge_reconciliation(start="2026-07-17T00:00:00Z") == result
+                mock.assert_awaited_once_with(start="2026-07-17T00:00:00Z", end=None)
+
     def test_admin_topup_credits(self):
         result = AdminTopupResponse(org_id="org-1", amount_usdc=1000, new_balance_usdc=2000)
         with AdminTeardropClient("http://test", token="tok.en.sig") as admin:
@@ -152,6 +172,7 @@ class TestAdminSyncDelegation:
             client_id="cid-1",
             client_secret="sec",
             org_id="org-1",
+            scope="publish",
             created_at="2026-07-17T00:00:00Z",
         )
         with AdminTeardropClient("http://test", token="tok.en.sig") as admin:
