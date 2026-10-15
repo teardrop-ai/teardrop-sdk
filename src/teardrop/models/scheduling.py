@@ -70,6 +70,17 @@ class ScheduledRunsPage(BaseModel):
     next_cursor: str | None = None
 
 
+class EventRunResultItem(ScheduledRunResult):
+    output_text: str | None = ""
+    error: str | None = ""
+    chain_id: str | None = None
+    hop_index: int | None = None
+
+
+class EventRunResultsResponse(ScheduledRunsPage):
+    items: list[EventRunResultItem]
+
+
 class ScheduledRunResultsResponse(BaseModel):
     """Alias matching OpenAPI schema for schedule/trigger run lists."""
 
@@ -120,6 +131,7 @@ class EventTrigger(BaseModel):
     schedule_kind: Literal["event"]
     enabled: bool
     callback_url: str | None = None
+    next_trigger_id: str | None = None
     trigger_token: str | None = None
     event_path: str | None = None
     consecutive_failures: int
@@ -152,6 +164,7 @@ class CreateEventTriggerRequest(BaseModel):
     name: str
     prompt: str
     callback_url: str | None = None
+    next_trigger_id: str | None = None
 
     @field_validator("callback_url")
     @classmethod
@@ -164,6 +177,7 @@ class UpdateEventTriggerRequest(BaseModel):
     prompt: str | None = None
     enabled: bool | None = None
     callback_url: str | None = None
+    next_trigger_id: str | None = None
 
     @field_validator("callback_url")
     @classmethod
