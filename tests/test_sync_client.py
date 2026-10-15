@@ -13,6 +13,8 @@ from teardrop.models import (
     BillingBalance,
     CreateEventTriggerRequest,
     CreateScheduleRequest,
+    EventRunResultItem,
+    EventRunResultsResponse,
     EventTaskResponse,
     EventTriggerWithSecret,
     LabelingDefinitionListResponse,
@@ -693,9 +695,9 @@ class TestSyncDelegation:
         assert runs_mock.call_args_list[1].kwargs == {"limit": 1, "cursor": "page-2"}
 
     def test_event_triggers_runs_iter_auto_paginates(self):
-        page_1 = ScheduledRunsPage(
+        page_1 = EventRunResultsResponse(
             items=[
-                ScheduledRunResult(
+                EventRunResultItem(
                     id="run-1",
                     schedule_id="evt-1",
                     org_id="org-1",
@@ -703,13 +705,15 @@ class TestSyncDelegation:
                     status="completed",
                     cost_usdc=0,
                     created_at="2026-01-01T00:00:00Z",
+                    chain_id="event-chain-1",
+                    hop_index=1,
                 )
             ],
             next_cursor="page-2",
         )
-        page_2 = ScheduledRunsPage(
+        page_2 = EventRunResultsResponse(
             items=[
-                ScheduledRunResult(
+                EventRunResultItem(
                     id="run-2",
                     schedule_id="evt-1",
                     org_id="org-1",
@@ -731,6 +735,9 @@ class TestSyncDelegation:
                 result = list(client.event_triggers.runs_iter("evt-1", limit=1))
 
         assert [item.id for item in result] == ["run-1", "run-2"]
+        assert isinstance(result[0], EventRunResultItem)
+        assert result[0].chain_id == "event-chain-1"
+        assert result[0].hop_index == 1
         assert runs_mock.call_args_list[0].kwargs == {"limit": 1, "cursor": None}
         assert runs_mock.call_args_list[1].kwargs == {"limit": 1, "cursor": "page-2"}
 

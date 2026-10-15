@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 
-from teardrop.client._core import _parse_scheduled_runs_page, _quote_path_segment
+from teardrop.client._core import _parse_event_run_results_page, _quote_path_segment
 from teardrop.models import (
     CreateEventTriggerRequest,
+    EventRunResultItem,
+    EventRunResultsResponse,
     EventTaskResponse,
     EventTrigger,
     EventTriggerCreatedResponse,
     EventTriggerListResponse,
     RotateSecretResponse,
     ScheduleDeletedResponse,
-    ScheduledRunResult,
-    ScheduledRunsPage,
     UpdateEventTriggerRequest,
 )
 
@@ -98,7 +98,7 @@ class EventTriggersModule:
         *,
         limit: int | None = None,
         cursor: str | None = None,
-    ) -> ScheduledRunsPage:
+    ) -> EventRunResultsResponse:
         http = await self._c._get_http()
         params: dict[str, Any] = {}
         if limit is not None:
@@ -111,7 +111,7 @@ class EventTriggersModule:
             params=params,
         )
         self._c._raise_for_status(resp)
-        return _parse_scheduled_runs_page(resp.json())
+        return _parse_event_run_results_page(resp.json())
 
     async def runs_iter(
         self,
@@ -119,7 +119,7 @@ class EventTriggersModule:
         *,
         limit: int = 100,
         cursor: str | None = None,
-    ) -> AsyncIterator[ScheduledRunResult]:
+    ) -> AsyncIterator[EventRunResultItem]:
         next_cursor = cursor
         while True:
             page = await self.runs(trigger_id, limit=limit, cursor=next_cursor)
@@ -161,7 +161,7 @@ class _SyncEventTriggersModule:
         *,
         limit: int | None = None,
         cursor: str | None = None,
-    ) -> ScheduledRunsPage:
+    ) -> EventRunResultsResponse:
         return self._c._run(
             self._c._async.event_triggers.runs(trigger_id, limit=limit, cursor=cursor)
         )
@@ -172,7 +172,7 @@ class _SyncEventTriggersModule:
         *,
         limit: int = 100,
         cursor: str | None = None,
-    ) -> Iterator[ScheduledRunResult]:
+    ) -> Iterator[EventRunResultItem]:
         next_cursor = cursor
         while True:
             page = self.runs(trigger_id, limit=limit, cursor=next_cursor)

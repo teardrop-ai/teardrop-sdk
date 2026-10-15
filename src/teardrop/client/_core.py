@@ -25,6 +25,7 @@ from teardrop.exceptions import (
 )
 from teardrop.models import (
     AgentCard,
+    EventRunResultsResponse,
     ModelBenchmarksResponse,
     OrgLlmConfig,
     ScheduledRunResult,
@@ -78,6 +79,12 @@ def _parse_scheduled_runs_page(data: Any) -> ScheduledRunsPage:
         items=[ScheduledRunResult.model_validate(item) for item in items],
         next_cursor=next_cursor,
     )
+
+
+def _parse_event_run_results_page(data: Any) -> EventRunResultsResponse:
+    if isinstance(data, list):
+        data = {"items": data}
+    return EventRunResultsResponse.model_validate(data)
 
 
 class _HttpProxy:

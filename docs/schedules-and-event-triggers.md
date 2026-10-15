@@ -48,6 +48,20 @@ async for run in client.event_triggers.runs_iter(trigger.id, limit=100):
     print(run.status, run.run_id)
 ```
 
+`CreateEventTriggerRequest` and `UpdateEventTriggerRequest` accept the optional,
+nullable `next_trigger_id` field. Event-trigger response models expose the same
+field when present.
+On update, omit `next_trigger_id` to leave it unchanged, or explicitly pass
+`next_trigger_id=None` to send JSON `null`.
+
+Event-trigger run history is returned as `EventRunResultsResponse`, whose
+required `items` field contains `EventRunResultItem` values. Each item requires
+`id`, `schedule_id`, `org_id`, `run_id`, `status`, `cost_usdc`, and `created_at`.
+`output_text`, `error`, `chain_id`, and `hop_index` are optional and nullable;
+`next_cursor` on the response is also optional and nullable.
+Run history accepts bare arrays and paginated envelopes; malformed envelopes
+raise a Pydantic `ValidationError` rather than being treated as empty history.
+
 Inbound dispatch is server-to-server and not a client method: your webhook source sends `POST /agent/events/{trigger_token}` with `X-Teardrop-Trigger-Secret` and a JSON body. Persist the secret returned by `create()` or `rotate_secret()` immediately.
 
 ## Verifying Signed Callback Payloads

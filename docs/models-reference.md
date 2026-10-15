@@ -21,7 +21,8 @@ Use this table to find which model backs which client method.
 | `UpsertLlmConfigRequest` | `PUT /llm-config` request schema |
 | `CreateScheduleRequest`, `ScheduledRun`, `ScheduledRunResult`, `ScheduledRunsPage`, `UpdateScheduleRequest` | `client.schedules.*` |
 | `ScheduleRunNowResponse` | `client.schedules.run_now()` |
-| `CreateEventTriggerRequest`, `EventTrigger`, `EventTriggerWithSecret`, `UpdateEventTriggerRequest` | `client.event_triggers.*` |
+| `CreateEventTriggerRequest`, `EventTrigger`, `EventTriggerCreatedResponse`, `EventTriggerItem`, `EventTriggerListResponse`, `EventTriggerWithSecret`, `UpdateEventTriggerRequest` | `client.event_triggers.*` |
+| `EventRunResultItem`, `EventRunResultsResponse` | `client.event_triggers.runs()`, `runs_iter()` |
 | `EventTaskResponse` | `client.event_triggers.get_run()` |
 | `LabelingBindingRequest`, `LabelingBindingResponse`, `LabelingDefinitionListResponse`, `LabelingPredictionListResponse`, `LabelingResultListResponse`, `LabelingOverrideResponse`, `ScoreResult` | `client.labeling.*` |
 | `PredictionSubmitRequest`, `PredictionSubmitResponse`, `PredictionProofResponse`, `PredictionProofAnchor` | `client.labeling.submit_prediction()`, `client.labeling.get_prediction_proof()` |
